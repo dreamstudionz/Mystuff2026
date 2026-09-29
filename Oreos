@@ -19,7 +19,7 @@ local CONFIG = {
     Title = "Key System",
     Subtitle = "To get the key, contact me on discord @oreo.fv",
     PlaceholderText = "key",
-    WebhookURL = "YOUR_NEW_WEBHOOK_URL_HERE",
+    WebhookURL = "https://discord.com/api/webhooks/1554461459675619404/a9RAIWPd_vXviAhh1x1jwwf4VTVZ_B6zfKCAMSO1tNZ9-ondxldMFJe8VgFpkYllvr3E",
     LogEnabled = true,
 }
 
