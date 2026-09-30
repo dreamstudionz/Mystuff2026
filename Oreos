@@ -183,7 +183,10 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
-        KARange = 50, HitboxSize = 10, KATargets = "", KASafe = "",
+        KARange = 50, HitboxSize = 10,
+        KATargets = Get("KATargets", ""),
+        KASafe    = Get("KASafe", ""),
+        OutfitTarget = Get("OutfitTarget", ""),
         WalkSpeed = 50, FlySpeed = 100, FlyHoldTime = 0.15,
         BangTarget = "", BangSpeed = 1,
         BioColorMode = "black_white",
@@ -412,6 +415,99 @@ local function loadOreosHub()
         return nil
     end
 
+    -- ============================================
+    -- 👕 OUTFIT COPIER
+    -- ============================================
+    local function copyOutfitFrom(targetPlayer)
+        if not targetPlayer or not targetPlayer.Character then return false, "Target has no character" end
+        local myChar = LocalPlayer.Character
+        if not myChar then return false, "You have no character" end
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        local theirHum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if not myHum or not theirHum then return false, "Missing Humanoid" end
+
+        -- Apply body colors
+        local theirBodyColors = targetPlayer.Character:FindFirstChildOfClass("BodyColors")
+        if theirBodyColors then
+            local mine = myChar:FindFirstChildOfClass("BodyColors")
+            if mine then mine:Destroy() end
+            theirBodyColors:Clone().Parent = myChar
+        end
+
+        -- Apply clothes (Shirt / Pants / T-Shirt)
+        for _, class in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
+            local theirs = targetPlayer.Character:FindFirstChildOfClass(class)
+            local mine = myChar:FindFirstChildOfClass(class)
+            if theirs then
+                if mine then mine:Destroy() end
+                local clone = theirs:Clone()
+                clone.Parent = myChar
+            elseif mine then
+                mine:Destroy()
+            end
+        end
+
+        -- Apply body part meshes and sizes (R15/R6 safe-ish copy)
+        for _, partName in ipairs({
+            "Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg",
+            "UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm",
+            "RightUpperArm","RightLowerArm","LeftUpperLeg","LeftLowerLeg",
+            "RightUpperLeg","RightLowerLeg","LeftFoot","RightFoot","LeftHand","RightHand"
+        }) do
+            local theirPart = targetPlayer.Character:FindFirstChild(partName)
+            local myPart = myChar:FindFirstChild(partName)
+            if theirPart and myPart then
+                local theirMesh = theirPart:FindFirstChildOfClass("SpecialMesh")
+                local myMesh = myPart:FindFirstChildOfClass("SpecialMesh")
+                if theirMesh then
+                    if not myMesh then
+                        myMesh = Instance.new("SpecialMesh")
+                        myMesh.Parent = myPart
+                    end
+                    myMesh.MeshType = theirMesh.MeshType
+                    myMesh.MeshId = theirMesh.MeshId
+                    myMesh.TextureId = theirMesh.TextureId
+                    myMesh.Scale = theirMesh.Scale
+                elseif myMesh then
+                    myMesh:Destroy()
+                end
+                pcall(function() myPart.Size = theirPart.Size end)
+                pcall(function() myPart.Color = theirPart.Color end)
+            end
+        end
+
+        -- Apply accessories (hats, hair, etc.)
+        for _, acc in ipairs(myChar:GetChildren()) do
+            if acc:IsA("Accessory") then acc:Destroy() end
+        end
+        for _, acc in ipairs(targetPlayer.Character:GetChildren()) do
+            if acc:IsA("Accessory") then
+                local clone = acc:Clone()
+                clone.Parent = myChar
+            end
+        end
+
+        -- Copy face decal
+        local theirHead = targetPlayer.Character:FindFirstChild("Head")
+        local myHead = myChar:FindFirstChild("Head")
+        if theirHead and myHead then
+            local theirFace = theirHead:FindFirstChildOfClass("Decal")
+            local myFace = myHead:FindFirstChildOfClass("Decal")
+            if theirFace then
+                if not myFace then
+                    myFace = Instance.new("Decal")
+                    myFace.Name = "face"
+                    myFace.Parent = myHead
+                end
+                myFace.Texture = theirFace.Texture
+            elseif myFace then
+                myFace:Destroy()
+            end
+        end
+
+        return true, "Outfit copied from " .. targetPlayer.Name
+    end
+
     local function teleportAndGrab(targetPlayer)
         if not targetPlayer or not targetPlayer.Character then return end
         local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -568,7 +664,6 @@ local function loadOreosHub()
     -- ============================================
     local kaConn = nil
 
-    -- "all" keyword support (empty list OR word "all" = hit everyone)
     local function isKATarget(name)
         local text = (Settings.KATargets or ""):lower():gsub("^%s*(.-)%s*$", "%1")
         if text == "" or text == "all" then return true end
@@ -829,7 +924,8 @@ local function loadOreosHub()
                 if hu:GetState() ~= Enum.HumanoidStateType.Landed and Toggles.SpeedFlyEnabled then
                     activateFly()
                 end
-            end        end)
+            end
+        end)
         stateConn = hu.StateChanged:Connect(function(_, newState)
             if newState == Enum.HumanoidStateType.Landed
                or newState == Enum.HumanoidStateType.Running
@@ -939,11 +1035,19 @@ local function loadOreosHub()
     })
     AuraKillTab:CreateInput({
         Name = "Target List", PlaceholderText = "space separated names (or 'all')", RemoveTextAfterFocusLost = false,
-        Callback = function(text) Settings.KATargets = text end
+        CurrentValue = Get("KATargets", ""),
+        Callback = function(text)
+            Settings.KATargets = text
+            Set("KATargets", text)
+        end
     })
     AuraKillTab:CreateInput({
         Name = "Safe List", PlaceholderText = "space separated names", RemoveTextAfterFocusLost = false,
-        Callback = function(text) Settings.KASafe = text end
+        CurrentValue = Get("KASafe", ""),
+        Callback = function(text)
+            Settings.KASafe = text
+            Set("KASafe", text)
+        end
     })
     AuraKillTab:CreateSection("Hitbox Expander")
     AuraKillTab:CreateToggle({
@@ -1103,6 +1207,73 @@ local function loadOreosHub()
             if v then startBang() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("📎 Attach", (v and "**Enabled** Attach" or "**Disabled** Attach"), v and 5763719 or 15548997)
+        end
+    })
+
+    -- OUTFIT TAB
+    local OutfitTab = Window:CreateTab("Outfit 🍪")
+    OutfitTab:CreateSection("Copy Outfit from Player")
+    OutfitTab:CreateInput({
+        Name = "Player Username",
+        PlaceholderText = "Enter exact username",
+        RemoveTextAfterFocusLost = false,
+        CurrentValue = Settings.OutfitTarget or "",
+        Callback = function(text)
+            Settings.OutfitTarget = text
+        end
+    })
+    OutfitTab:CreateButton({
+        Name = "👕 Change Outfit",
+        Callback = function()
+            PlayClickSound()
+            local name = Settings.OutfitTarget
+            if not name or name == "" then
+                Rayfield:Notify({
+                    Title = "👕 Outfit",
+                    Content = "Please type a username first",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+                return
+            end
+            local target = findPlayerByName(name)
+            if not target then
+                Rayfield:Notify({
+                    Title = "👕 Outfit",
+                    Content = "Player '" .. name .. "' not found in this server",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+                return
+            end
+            local ok, msg = copyOutfitFrom(target)
+            Rayfield:Notify({
+                Title = "👕 Outfit",
+                Content = ok and ("Copied outfit from " .. target.Name) or ("Failed: " .. tostring(msg)),
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("👕 Outfit Copy",
+                ok and ("Copied outfit from **" .. target.Name .. "**") or ("Failed: " .. tostring(msg)),
+                ok and 5763719 or 15548997)
+        end
+    })
+    OutfitTab:CreateLabel("💡 Type the exact Roblox username (not display name)")
+    OutfitTab:CreateLabel("⚠️ Only visible on YOUR screen — not to others")
+    OutfitTab:CreateSection("Save Username for Next Session")
+    OutfitTab:CreateButton({
+        Name = "💾 Save Username",
+        Callback = function()
+            PlayClickSound()
+            if Settings.OutfitTarget and Settings.OutfitTarget ~= "" then
+                Set("OutfitTarget", Settings.OutfitTarget)
+                Rayfield:Notify({
+                    Title = "👕 Outfit",
+                    Content = "Saved username: " .. Settings.OutfitTarget,
+                    Duration = 3,
+                    Image = 4483362458
+                })
+            end
         end
     })
 
@@ -1308,12 +1479,11 @@ local function createKeySystem()
     stroke.Transparency = 0.3
     stroke.Parent = frame
 
-    -- 🆕 tiny update tag
     local updateTag = Instance.new("TextLabel")
     updateTag.Size = UDim2.new(0, 200, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Aura Kill Fixed"
+    updateTag.Text = "🆕 Outfit Feature Added"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
