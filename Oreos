@@ -1212,7 +1212,45 @@ local function loadOreosHub()
 
     -- OUTFIT TAB
     local OutfitTab = Window:CreateTab("Outfit 🍪")
-    OutfitTab:CreateSection("Copy Outfit from Player")
+    OutfitTab:CreateSection("Pick from Server Players")
+
+    -- Returns list of player names currently in the server
+    local function getServerPlayers()
+        local list = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                table.insert(list, p.Name)
+            end
+        end
+        if #list == 0 then table.insert(list, "No other players") end
+        return list
+    end
+
+    local outfitDropdown
+    outfitDropdown = OutfitTab:CreateDropdown({
+        Name = "Players in Server",
+        Options = getServerPlayers(),
+        CurrentOption = { "Select a player" },
+        MultipleOptions = false,
+        Flag = "OutfitDropdown",
+        Callback = function(selected)
+            if selected and selected[1] and selected[1] ~= "No other players" and selected[1] ~= "Select a player" then
+                Settings.OutfitTarget = selected[1]
+            end
+        end
+    })
+
+    OutfitTab:CreateButton({
+        Name = "🔄 Refresh Player List",
+        Callback = function()
+            PlayClickSound()
+            if outfitDropdown then
+                outfitDropdown:Refresh(getServerPlayers())
+            end
+        end
+    })
+
+    OutfitTab:CreateSection("Or Type Username Manually")
     OutfitTab:CreateInput({
         Name = "Player Username",
         PlaceholderText = "Enter exact username",
@@ -1222,6 +1260,8 @@ local function loadOreosHub()
             Settings.OutfitTarget = text
         end
     })
+
+    OutfitTab:CreateSection("Actions")
     OutfitTab:CreateButton({
         Name = "👕 Change Outfit",
         Callback = function()
@@ -1230,7 +1270,7 @@ local function loadOreosHub()
             if not name or name == "" then
                 Rayfield:Notify({
                     Title = "👕 Outfit",
-                    Content = "Please type a username first",
+                    Content = "Pick a player or type a username first",
                     Duration = 3,
                     Image = 4483362458
                 })
@@ -1258,24 +1298,36 @@ local function loadOreosHub()
                 ok and 5763719 or 15548997)
         end
     })
-    OutfitTab:CreateLabel("💡 Type the exact Roblox username (not display name)")
-    OutfitTab:CreateLabel("⚠️ Only visible on YOUR screen — not to others")
-    OutfitTab:CreateSection("Save Username for Next Session")
+
     OutfitTab:CreateButton({
-        Name = "💾 Save Username",
+        Name = "🔄 Reset to My Avatar",
         Callback = function()
             PlayClickSound()
-            if Settings.OutfitTarget and Settings.OutfitTarget ~= "" then
-                Set("OutfitTarget", Settings.OutfitTarget)
+            local myChar = LocalPlayer.Character
+            if not myChar then
                 Rayfield:Notify({
                     Title = "👕 Outfit",
-                    Content = "Saved username: " .. Settings.OutfitTarget,
+                    Content = "You have no character",
                     Duration = 3,
                     Image = 4483362458
                 })
+                return
             end
+            pcall(function()
+                LocalPlayer:LoadCharacter()
+            end)
+            Rayfield:Notify({
+                Title = "👕 Outfit",
+                Content = "Resetting to your own avatar...",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🔄 Outfit Reset", "Player reset their outfit to their own avatar", 5763719)
         end
     })
+
+    OutfitTab:CreateLabel("💡 Pick a player from the dropdown or type a username")
+    OutfitTab:CreateLabel("⚠️ Outfit is only visible on YOUR screen — not to others")
 
     -- GLOWING BIO TAB
     local GlowBioTab = Window:CreateTab("Glowing Bio 🍪")
