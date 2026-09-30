@@ -426,7 +426,6 @@ local function loadOreosHub()
         local theirHum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
         if not myHum or not theirHum then return false, "Missing Humanoid" end
 
-        -- Apply body colors
         local theirBodyColors = targetPlayer.Character:FindFirstChildOfClass("BodyColors")
         if theirBodyColors then
             local mine = myChar:FindFirstChildOfClass("BodyColors")
@@ -434,7 +433,6 @@ local function loadOreosHub()
             theirBodyColors:Clone().Parent = myChar
         end
 
-        -- Apply clothes (Shirt / Pants / T-Shirt)
         for _, class in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
             local theirs = targetPlayer.Character:FindFirstChildOfClass(class)
             local mine = myChar:FindFirstChildOfClass(class)
@@ -447,7 +445,6 @@ local function loadOreosHub()
             end
         end
 
-        -- Apply body part meshes and sizes (R15/R6 safe-ish copy)
         for _, partName in ipairs({
             "Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg",
             "UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm",
@@ -476,7 +473,6 @@ local function loadOreosHub()
             end
         end
 
-        -- Apply accessories (hats, hair, etc.)
         for _, acc in ipairs(myChar:GetChildren()) do
             if acc:IsA("Accessory") then acc:Destroy() end
         end
@@ -487,7 +483,6 @@ local function loadOreosHub()
             end
         end
 
-        -- Copy face decal
         local theirHead = targetPlayer.Character:FindFirstChild("Head")
         local myHead = myChar:FindFirstChild("Head")
         if theirHead and myHead then
@@ -1214,7 +1209,6 @@ local function loadOreosHub()
     local OutfitTab = Window:CreateTab("Outfit 🍪")
     OutfitTab:CreateSection("Pick from Server Players")
 
-    -- Returns list of player names currently in the server
     local function getServerPlayers()
         local list = {}
         for _, p in ipairs(Players:GetPlayers()) do
@@ -1494,6 +1488,46 @@ local function loadOreosHub()
         end
     })
 
+    -- ============================================
+    -- SETTINGS TAB
+    -- ============================================
+    local SettingsTab = Window:CreateTab("Settings 🍪")
+    SettingsTab:CreateSection("Server")
+
+    SettingsTab:CreateButton({
+        Name = "🔄 Rejoin Server",
+        Callback = function()
+            PlayClickSound()
+            Rayfield:Notify({
+                Title = "🔄 Rejoin",
+                Content = "Rejoining server...",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🔄 Rejoin", "Player used Rejoin Server", 5763719)
+            task.wait(0.5)
+            pcall(function()
+                game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+            end)
+        end
+    })
+
+    SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
+
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("Server Info")
+
+    SettingsTab:CreateLabel("🎮 Game ID: " .. tostring(game.PlaceId))
+    SettingsTab:CreateLabel("🌐 Job ID: " .. (game.JobId ~= "" and game.JobId or "N/A"))
+    SettingsTab:CreateLabel("👤 You: " .. LocalPlayer.Name)
+    SettingsTab:CreateLabel("🆔 User ID: " .. tostring(LocalPlayer.UserId))
+
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("About")
+    SettingsTab:CreateLabel("🍪 Oreo's Hub")
+    SettingsTab:CreateLabel("Made by Oreo")
+    SettingsTab:CreateLabel("Discord: @oreo.fv")
+
     Rayfield:Notify({
         Title = "🍪 Oreo's Hub",
         Content = "Hub loaded successfully!",
@@ -1535,7 +1569,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 200, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Outfit Feature Added"
+    updateTag.Text = "🆕 Outfit + Settings Tabs Added"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
