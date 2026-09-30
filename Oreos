@@ -564,38 +564,78 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- KILL AURA
+    -- KILL AURA (LEGEND edition - nearest target)
     -- ============================================
     local kaConn = nil
+
+    -- "all" keyword support (empty list OR word "all" = hit everyone)
+    local function isKATarget(name)
+        local text = (Settings.KATargets or ""):lower():gsub("^%s*(.-)%s*$", "%1")
+        if text == "" or text == "all" then return true end
+        local lowerName = name:lower()
+        for t in text:gmatch("%S+") do
+            if lowerName:find(t, 1, true) then return true end
+        end
+        return false
+    end
+
+    local function doKAHit(hum, pos)
+        if not hum or not hum.Parent then return end
+        if not HitRF then return end
+        pcall(function()
+            if HitRF:IsA("RemoteFunction") then
+                HitRF:InvokeServer(hum, Vector3.new(pos.X, pos.Y, pos.Z))
+            else
+                HitRF:FireServer(hum, Vector3.new(pos.X, pos.Y, pos.Z))
+            end
+        end)
+    end
+
     local function startKA()
         if kaConn then kaConn:Disconnect() end
         kaConn = RunService.Heartbeat:Connect(function()
             if not Toggles.KillAura or not HitRF then return end
             local mc = LocalPlayer.Character
-            local hrp = mc and mc:FindFirstChild("HumanoidRootPart")
-            if not hrp then return end
-            local tl = parseList(Settings.KATargets)
+            if not mc then return end
+            local myHRP = mc:FindFirstChild("HumanoidRootPart")
+            if not myHRP then return end
+
             local sl = parseList(Settings.KASafe)
+            local nearest = nil
+            local nearDist = math.huge
+
             for _, p in Players:GetPlayers() do
-                if p ~= LocalPlayer and not isSafe(p.Name, sl) and isTarget(p.Name, tl) then
-                    local c = p.Character
-                    if c then
-                        local hu = c:FindFirstChild("Humanoid")
-                        local thrp = c:FindFirstChild("HumanoidRootPart")
-                        if hu and thrp and hu.Health > 0 then
-                            if (thrp.Position - hrp.Position).Magnitude <= Settings.KARange then
-                                pcall(function()
-                                    if HitRF:IsA("RemoteFunction") then HitRF:InvokeServer(hu, hrp.Position)
-                                    else HitRF:FireServer(hu, hrp.Position) end
-                                end)
-                            end
-                        end
+                if p == LocalPlayer then continue end
+                if not p.Character then continue end
+                if isSafe(p.Name, sl) then continue end
+                if not isKATarget(p.Name) then continue end
+
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+
+                if hrp and hum and hum.Health > 0 then
+                    local dist = (hrp.Position - myHRP.Position).Magnitude
+                    if dist <= Settings.KARange and dist < nearDist then
+                        nearDist = dist
+                        nearest = {
+                            hum = hum,
+                            pos = hrp.Position + hrp.CFrame.LookVector * 2
+                        }
                     end
                 end
             end
+
+            if nearest then
+                task.spawn(function()
+                    doKAHit(nearest.hum, nearest.pos)
+                end)
+            end
         end)
     end
-    local function stopKA() if kaConn then kaConn:Disconnect(); kaConn = nil end end
+
+    local function stopKA()
+        if kaConn then kaConn:Disconnect(); kaConn = nil end
+    end
 
     -- ============================================
     -- SPAM GRAB
@@ -789,8 +829,7 @@ local function loadOreosHub()
                 if hu:GetState() ~= Enum.HumanoidStateType.Landed and Toggles.SpeedFlyEnabled then
                     activateFly()
                 end
-            end
-        end)
+            end        end)
         stateConn = hu.StateChanged:Connect(function(_, newState)
             if newState == Enum.HumanoidStateType.Landed
                or newState == Enum.HumanoidStateType.Running
@@ -899,7 +938,7 @@ local function loadOreosHub()
         Callback = function(v) Settings.KARange = v end
     })
     AuraKillTab:CreateInput({
-        Name = "Target List", PlaceholderText = "space separated names", RemoveTextAfterFocusLost = false,
+        Name = "Target List", PlaceholderText = "space separated names (or 'all')", RemoveTextAfterFocusLost = false,
         Callback = function(text) Settings.KATargets = text end
     })
     AuraKillTab:CreateInput({
@@ -1256,8 +1295,8 @@ local function createKeySystem()
     blur.Parent = game:GetService("Lighting")
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 400, 0, 220)
-    frame.Position = UDim2.new(0.5, -200, 0.5, -110)
+    frame.Size = UDim2.new(0, 400, 0, 250)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -125)
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     frame.BorderSizePixel = 0
     frame.Parent = gui
@@ -1269,9 +1308,21 @@ local function createKeySystem()
     stroke.Transparency = 0.3
     stroke.Parent = frame
 
+    -- 🆕 tiny update tag
+    local updateTag = Instance.new("TextLabel")
+    updateTag.Size = UDim2.new(0, 200, 0, 12)
+    updateTag.Position = UDim2.new(0, 20, 0, 8)
+    updateTag.BackgroundTransparency = 1
+    updateTag.Text = "🆕 Aura Kill Fixed"
+    updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
+    updateTag.Font = Enum.Font.GothamBold
+    updateTag.TextSize = 10
+    updateTag.TextXAlignment = Enum.TextXAlignment.Left
+    updateTag.Parent = frame
+
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -40, 0, 30)
-    title.Position = UDim2.new(0, 20, 0, 20)
+    title.Position = UDim2.new(0, 20, 0, 22)
     title.BackgroundTransparency = 1
     title.Text = CONFIG.Title
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1282,7 +1333,7 @@ local function createKeySystem()
 
     local subtitle = Instance.new("TextLabel")
     subtitle.Size = UDim2.new(1, -40, 0, 18)
-    subtitle.Position = UDim2.new(0, 20, 0, 50)
+    subtitle.Position = UDim2.new(0, 20, 0, 52)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = CONFIG.Subtitle
     subtitle.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -1293,7 +1344,7 @@ local function createKeySystem()
 
     local inputFrame = Instance.new("Frame")
     inputFrame.Size = UDim2.new(1, -40, 0, 40)
-    inputFrame.Position = UDim2.new(0, 20, 0, 85)
+    inputFrame.Position = UDim2.new(0, 20, 0, 90)
     inputFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     inputFrame.BorderSizePixel = 0
     inputFrame.Parent = frame
@@ -1315,7 +1366,7 @@ local function createKeySystem()
 
     local submitBtn = Instance.new("TextButton")
     submitBtn.Size = UDim2.new(1, -40, 0, 40)
-    submitBtn.Position = UDim2.new(0, 20, 0, 140)
+    submitBtn.Position = UDim2.new(0, 20, 0, 148)
     submitBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     submitBtn.Text = "SUBMIT"
     submitBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -1327,7 +1378,7 @@ local function createKeySystem()
 
     local keyStatus = Instance.new("TextLabel")
     keyStatus.Size = UDim2.new(1, -40, 0, 18)
-    keyStatus.Position = UDim2.new(0, 20, 0, 185)
+    keyStatus.Position = UDim2.new(0, 20, 0, 196)
     keyStatus.BackgroundTransparency = 1
     keyStatus.Text = ""
     keyStatus.TextColor3 = Color3.fromRGB(255, 50, 50)
