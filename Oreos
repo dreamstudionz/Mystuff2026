@@ -1515,14 +1515,6 @@ local function loadOreosHub()
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
 
     SettingsTab:CreateDivider()
-    SettingsTab:CreateSection("Server Info")
-
-    SettingsTab:CreateLabel("🎮 Game ID: " .. tostring(game.PlaceId))
-    SettingsTab:CreateLabel("🌐 Job ID: " .. (game.JobId ~= "" and game.JobId or "N/A"))
-    SettingsTab:CreateLabel("👤 You: " .. LocalPlayer.Name)
-    SettingsTab:CreateLabel("🆔 User ID: " .. tostring(LocalPlayer.UserId))
-
-    SettingsTab:CreateDivider()
     SettingsTab:CreateSection("About")
     SettingsTab:CreateLabel("🍪 Oreo's Hub")
     SettingsTab:CreateLabel("Made by Oreo")
