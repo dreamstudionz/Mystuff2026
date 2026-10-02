@@ -303,24 +303,12 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (STRICTER - only real grabs)
+    -- 🚨 ESCAPE GRAB SYSTEM (GRAB_weld detection)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
     local grabCooldown = 0
-    local myHistory = {}
     local grabConfirmCount = 0
-
-    local function isMovingKeys()
-        return UserInputService:IsKeyDown(Enum.KeyCode.W)
-            or UserInputService:IsKeyDown(Enum.KeyCode.A)
-            or UserInputService:IsKeyDown(Enum.KeyCode.S)
-            or UserInputService:IsKeyDown(Enum.KeyCode.D)
-            or UserInputService:IsKeyDown(Enum.KeyCode.Up)
-            or UserInputService:IsKeyDown(Enum.KeyCode.Down)
-            or UserInputService:IsKeyDown(Enum.KeyCode.Left)
-            or UserInputService:IsKeyDown(Enum.KeyCode.Right)
-    end
 
     local function escapeFromGrab(reason)
         if escapeGrabFlag then return end
@@ -346,64 +334,73 @@ local function loadOreosHub()
 
         task.wait(0.5)
         escapeGrabFlag = false
-        myHistory = {}
         grabConfirmCount = 0
     end
 
-    local function checkGrab()
+    -- Detect if another player is grabbing US via a GRAB_weld
+    local function isGrabbedByOtherPlayer()
         local ch = LocalPlayer.Character
-        if not ch then return false end
-        local myHRP = ch:FindFirstChild("HumanoidRootPart")
-        local myHu = ch:FindFirstChildOfClass("Humanoid")
-        if not myHRP or not myHu then return false end
-        if myHu.Health <= 0 then return false end
-        if Toggles.SpamGrab then return false end
+        if not ch then return false, nil end
 
-        local closestDist = math.huge
+        -- Check every other player's character for a GRAB_weld that connects to us
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
-                local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                if theirHu and theirHu.Health > 0 and theirHRP then
-                    local d = (theirHRP.Position - myHRP.Position).Magnitude
-                    if d < closestDist then
-                        closestDist = d
+                if theirHu and theirHu.Health > 0 then
+                    local grabWeld = p.Character:FindFirstChild("GRAB_weld", true)
+                    if grabWeld and (grabWeld:IsA("Weld") or grabWeld:IsA("WeldConstraint")) then
+                        local p0 = grabWeld.Part0
+                        local p1 = grabWeld.Part1
+                        if p0 and p1 then
+                            local p0Theirs = p0:IsDescendantOf(p.Character)
+                            local p1Theirs = p1:IsDescendantOf(p.Character)
+                            local p0Ours = p0:IsDescendantOf(ch)
+                            local p1Ours = p1:IsDescendantOf(ch)
+                            if (p0Theirs and p1Ours) or (p1Theirs and p0Ours) then
+                                return true, p.Name
+                            end
+                        else
+                            return true, p.Name
+                        end
                     end
                 end
             end
         end
 
-        local now = tick()
-        table.insert(myHistory, {t = now, pos = myHRP.Position})
-        while #myHistory > 0 and now - myHistory[1].t > 0.5 do table.remove(myHistory, 1) end
-
-        local myMove = 0
-        if #myHistory >= 2 then
-            myMove = (myHistory[#myHistory].pos - myHistory[1].pos).Magnitude
+        -- Also check OUR character for a GRAB_weld pointing to them
+        local myGrab = ch:FindFirstChild("GRAB_weld", true)
+        if myGrab and (myGrab:IsA("Weld") or myGrab:IsA("WeldConstraint")) then
+            local p0 = myGrab.Part0
+            local p1 = myGrab.Part1
+            if p0 and p1 then
+                local other = p0:IsDescendantOf(ch) and p1 or p0
+                local otherChar = other:FindFirstAncestorOfClass("Model")
+                if otherChar and otherChar ~= ch then
+                    local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
+                    if otherPlayer and otherPlayer ~= LocalPlayer then
+                        return true, otherPlayer.Name
+                    end
+                end
+            end
         end
 
-        local movingKeys = isMovingKeys()
-
-        -- STRICTER detection:
-        -- 1. Grabber must be VERY close (< 2 studs, almost overlapping)
-        -- 2. We must have moved a real distance (> 2 studs in 0.5s) — grabs drag you
-        -- 3. We must NOT be pressing keys
-        return (not movingKeys) and myMove > 2 and closestDist < 2
+        return false, nil
     end
 
     local function startEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
-        myHistory = {}
         grabConfirmCount = 0
 
         escapeGrabConn = RunService.Heartbeat:Connect(function()
             if not Toggles.EscapeGrab then return end
             if escapeGrabFlag then return end
 
-            if checkGrab() then
+            local grabbed, grabberName = isGrabbedByOtherPlayer()
+
+            if grabbed then
                 grabConfirmCount = grabConfirmCount + 1
-                if grabConfirmCount >= 5 then
-                    escapeFromGrab("detected grab")
+                if grabConfirmCount >= 3 then
+                    escapeFromGrab("GRAB_weld from " .. tostring(grabberName))
                 end
             else
                 grabConfirmCount = 0
@@ -413,7 +410,6 @@ local function loadOreosHub()
 
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
-        myHistory = {}
         grabConfirmCount = 0
     end
 
@@ -847,8 +843,7 @@ local function loadOreosHub()
             flyBodyGyro.Parent = hrp
 
             flyConn = RunService.Heartbeat:Connect(function()
-                if not Toggles.FlyActive then return end
-                local c = LocalPlayer.Character
+                if not Toggles.FlyActive then return end                local c = LocalPlayer.Character
                 local r = c and c:FindFirstChild("HumanoidRootPart")
                 local h = c and c:FindFirstChildOfClass("Humanoid")
                 if not r or not h then return end
@@ -1300,7 +1295,7 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets only on real grabs (not collisions)")
+    ProtectionTab:CreateLabel("🚨 Auto-resets only when someone grabs YOU (GRAB_weld detect)")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
@@ -1627,7 +1622,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Smarter Escape Grab"
+    updateTag.Text = "🆕 Spin + Escape Grab Fixd"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
