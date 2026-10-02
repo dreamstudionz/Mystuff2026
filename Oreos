@@ -414,65 +414,51 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🌀 SPIN PLAYER SYSTEM (BodyAngularVelocity version)
+    -- 🌀 SPIN PLAYER SYSTEM (RenderStepped + unanchor — beats gym fight mode)
     -- ============================================
     local spinConn = nil
-    local spinBody = nil
+    local spinAngle = 0
 
     local function startSpin()
-        -- Clean up previous
         if spinConn then spinConn:Disconnect(); spinConn = nil end
-        if spinBody then spinBody:Destroy(); spinBody = nil end
+        spinAngle = 0
 
-        local ch = LocalPlayer.Character
-        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        -- Create BodyAngularVelocity on HRP
-        spinBody = Instance.new("BodyAngularVelocity")
-        spinBody.Name = "Oreo_Spin"
-        spinBody.MaxTorque = Vector3.new(0, math.huge, 0)
-        spinBody.AngularVelocity = Vector3.new(0, Settings.SpinSpeed, 0)
-        spinBody.P = 100000
-        spinBody.Parent = hrp
-
-        -- Also disable AutoRotate so the humanoid doesn't fight the spin
-        local hu = ch:FindFirstChildOfClass("Humanoid")
-        if hu then hu.AutoRotate = false end
-
-        -- Keep re-applying in case game removes it
-        spinConn = RunService.Heartbeat:Connect(function()
+        spinConn = RunService.RenderStepped:Connect(function(dt)
             if not Toggles.SpinPlayer then return end
-            local c = LocalPlayer.Character
-            if not c then return end
-            local r = c:FindFirstChild("HumanoidRootPart")
-            if not r then return end
-            local s = r:FindFirstChild("Oreo_Spin")
-            if not s then
-                -- Recreate if destroyed
-                s = Instance.new("BodyAngularVelocity")
-                s.Name = "Oreo_Spin"
-                s.MaxTorque = Vector3.new(0, math.huge, 0)
-                s.P = 100000
-                s.Parent = r
+            local ch = LocalPlayer.Character
+            if not ch then return end
+            local hrp = ch:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            -- Un-anchor HRP if the game anchored it (fight mode)
+            if hrp.Anchored then
+                hrp.Anchored = false
             end
-            s.AngularVelocity = Vector3.new(0, Settings.SpinSpeed, 0)
+
+            -- Force humanoid to not fight our rotation
+            local hu = ch:FindFirstChildOfClass("Humanoid")
+            if hu then
+                if hu.AutoRotate then hu.AutoRotate = false end
+                if hu.PlatformStand then hu.PlatformStand = false end
+            end
+
+            -- Spin
+            spinAngle = spinAngle + (dt * Settings.SpinSpeed)
+            if spinAngle > math.pi * 2 then spinAngle = spinAngle - math.pi * 2 end
+
+            local pos = hrp.Position
+            hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, spinAngle, 0)
         end)
     end
 
     local function stopSpin()
         if spinConn then spinConn:Disconnect(); spinConn = nil end
+        -- Restore AutoRotate
         local ch = LocalPlayer.Character
         if ch then
-            local hrp = ch:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local s = hrp:FindFirstChild("Oreo_Spin")
-                if s then s:Destroy() end
-            end
             local hu = ch:FindFirstChildOfClass("Humanoid")
             if hu then hu.AutoRotate = true end
         end
-        spinBody = nil
     end
 
     -- ============================================
@@ -1643,7 +1629,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Gym TP + BodySpin Fix"
+    updateTag.Text = "🆕 Gym Spin Fix (RenderStepped)"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
