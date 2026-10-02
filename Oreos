@@ -198,6 +198,7 @@ local function loadOreosHub()
         GrabTarget2 = "",
         GrabDistance = 3,
         AutoTargetRange = 50,
+        EscapeSensitivity = 3,
     }
 
     -- ============================================
@@ -300,52 +301,39 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (Power Grab only)
+    -- 🚨 ESCAPE GRAB SYSTEM (AUTO - working detection)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
     local grabCooldown = 0
     local lastGrabbedState = false
-    local grabRemote = nil
+    local myHistory = {}
+    local theirHistory = {}
 
-    -- Find the ACTUAL grab remote (Knit CombatService)
-    pcall(function()
-        local knitFolder = ReplicatedStorage:FindFirstChild("OldPackages")
-        if knitFolder then
-            local services = knitFolder:FindFirstChild("Knit")
-            if services then
-                services = services:FindFirstChild("Services")
-                if services then
-                    local combat = services:FindFirstChild("CombatService")
-                    if combat then
-                        local rf = combat:FindFirstChild("RF")
-                        if rf then
-                            grabRemote = rf:FindFirstChild("Grab")
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    if grabRemote then
-        print("[EscapeGrab] Found grab remote:", grabRemote:GetFullName())
-    else
-        print("[EscapeGrab] Could not find CombatService.RF.Grab — using fallback")
+    local function isMovingKeys()
+        return UserInputService:IsKeyDown(Enum.KeyCode.W)
+            or UserInputService:IsKeyDown(Enum.KeyCode.A)
+            or UserInputService:IsKeyDown(Enum.KeyCode.S)
+            or UserInputService:IsKeyDown(Enum.KeyCode.D)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Up)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Down)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Left)
+            or UserInputService:IsKeyDown(Enum.KeyCode.Right)
     end
 
-    local function escapeFromGrab()
+    local function escapeFromGrab(reason)
         if escapeGrabFlag then return end
-        if tick() - grabCooldown < 1.5 then return end
+        if tick() - grabCooldown < 2 then return end
         grabCooldown = tick()
         escapeGrabFlag = true
+        print("[EscapeGrab] Reset! " .. reason)
 
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxassetid://9120386436"
-        sound.Volume = 7
-        sound.Parent = game:GetService("SoundService")
-        sound:Play()
-        game:GetService("Debris"):AddItem(sound, 3)
+        local s = Instance.new("Sound")
+        s.SoundId = "rbxassetid://9120386436"
+        s.Volume = 7
+        s.Parent = game:GetService("SoundService")
+        s:Play()
+        game:GetService("Debris"):AddItem(s, 3)
 
         pcall(function()
             local ch = LocalPlayer.Character
@@ -358,11 +346,10 @@ local function loadOreosHub()
         task.wait(0.5)
         escapeGrabFlag = false
         lastGrabbedState = false
+        myHistory = {}
+        theirHistory = {}
     end
 
-    -- CFrame-based grab detection (since this game uses NO welds):
-    -- If another player is within ~4 studs of our HRP AND we can't move
-    -- (near-zero velocity) AND we're not the ones grabbing → we're grabbed
     local function isHeldByOtherPlayer()
         local ch = LocalPlayer.Character
         if not ch then return false end
@@ -370,58 +357,74 @@ local function loadOreosHub()
         local myHu = ch:FindFirstChildOfClass("Humanoid")
         if not myHRP or not myHu then return false end
         if myHu.Health <= 0 then return false end
-
-        -- Don't trigger if WE'RE the ones grabbing
         if Toggles.SpamGrab then return false end
 
-        -- Check if we're moving. If we ARE moving, we're not grabbed.
-        local velocity = myHRP.AssemblyLinearVelocity.Magnitude
-        -- Grabbed players have basically zero velocity
-        if velocity > 8 then return false end
-
-        -- Also check: are we pressing any movement keys?
-        -- If we're trying to move but can't, that's a strong grab signal.
-        local isTryingToMove = false
-        pcall(function()
-            local hu = myHu
-            if hu.MoveDirection.Magnitude > 0.1 then isTryingToMove = true end
-        end)
-
-        -- Find players very close to us
+        -- Find nearest player
+        local closestDist = math.huge
+        local closestHRP = nil
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
                 local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
                 if theirHu and theirHu.Health > 0 and theirHRP then
-                    local dist = (theirHRP.Position - myHRP.Position).Magnitude
-                    -- If they're within 4 studs of us and we're not moving, we're grabbed
-                    if dist < 4 then
-                        -- Extra confirmation: they should be moving/grabbing us,
-                        -- not just standing near us
-                        local theirMoving = theirHu.MoveDirection.Magnitude > 0.1
-                        if theirMoving or isTryingToMove then
-                            return true
-                        end
+                    local d = (theirHRP.Position - myHRP.Position).Magnitude
+                    if d < closestDist then
+                        closestDist = d
+                        closestHRP = theirHRP
                     end
                 end
             end
         end
 
-        return false
+        if not closestHRP then return false end
+
+        -- Track positions over last 0.5s
+        local now = tick()
+        table.insert(myHistory, {t = now, pos = myHRP.Position})
+        table.insert(theirHistory, {t = now, pos = closestHRP.Position})
+        while #myHistory > 0 and now - myHistory[1].t > 0.5 do table.remove(myHistory, 1) end
+        while #theirHistory > 0 and now - theirHistory[1].t > 0.5 do table.remove(theirHistory, 1) end
+
+        local myMove = 0
+        local theirMove = 0
+        if #myHistory >= 2 then
+            myMove = (myHistory[#myHistory].pos - myHistory[1].pos).Magnitude
+        end
+        if #theirHistory >= 2 then
+            theirMove = (theirHistory[#theirHistory].pos - theirHistory[1].pos).Magnitude
+        end
+
+        local movingKeys = isMovingKeys()
+        local iAmBeingMoved = myMove > 0.05
+        local theyAreMoving = theirMove > 0.05
+        local veryClose = closestDist < Settings.EscapeSensitivity
+
+        -- GRABBED = server is moving us + we're not pressing keys + they're close + they're moving
+        return (not movingKeys) and iAmBeingMoved and theyAreMoving and veryClose
     end
 
     local function startEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
+        myHistory = {}
+        theirHistory = {}
 
         escapeGrabConn = RunService.Heartbeat:Connect(function()
             if not Toggles.EscapeGrab then return end
             if escapeGrabFlag then return end
 
             local grabbed = isHeldByOtherPlayer()
-            -- Rising edge: only fire when transitioning from not-grabbed → grabbed
+
             if grabbed and not lastGrabbedState then
-                print("[EscapeGrab] Grab detected! Resetting...")
-                escapeFromGrab()
+                -- Confirm over 5 frames to eliminate flukes
+                local confirmed = 0
+                for i = 1, 5 do
+                    RunService.Heartbeat:Wait()
+                    if not isHeldByOtherPlayer() then break end
+                    confirmed = confirmed + 1
+                end
+                if confirmed >= 5 then
+                    escapeFromGrab("detected grab")
+                end
             end
             lastGrabbedState = grabbed
         end)
@@ -430,6 +433,8 @@ local function loadOreosHub()
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
         lastGrabbedState = false
+        myHistory = {}
+        theirHistory = {}
     end
 
     -- ============================================
@@ -1260,7 +1265,7 @@ local function loadOreosHub()
         end
     })
     ProtectionTab:CreateToggle({
-        Name = "Escape Grab", CurrentValue = false, Flag = "EscapeGrab",
+        Name = "Escape Grab (Auto)", CurrentValue = false, Flag = "EscapeGrab",
         Callback = function(v)
             PlayClickSound()
             Toggles.EscapeGrab = v
@@ -1268,7 +1273,13 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets only when grabbed by Power Grab")
+    ProtectionTab:CreateLabel("🚨 Auto-resets when you get grabbed (server-forced movement)")
+    ProtectionTab:CreateSlider({
+        Name = "Escape Sensitivity (studs)", Range = {1, 6}, Increment = 1,
+        CurrentValue = 3, Flag = "EscapeSensitivity",
+        Callback = function(v) Settings.EscapeSensitivity = v end
+    })
+    ProtectionTab:CreateLabel("⬆️ Higher = more sensitive (may false-trigger)")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
@@ -1527,10 +1538,10 @@ local function createKeySystem()
     stroke.Parent = frame
 
     local updateTag = Instance.new("TextLabel")
-    updateTag.Size = UDim2.new(0, 200, 0, 12)
+    updateTag.Size = UDim2.new(0, 260, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Fixed Escape Grab (CFrame detect)"
+    updateTag.Text = "🆕 Auto Escape Grab Working!"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
@@ -1671,4 +1682,3 @@ end
 -- ============================================
 createKeySystem()
 print("🔑 Key System Loaded")
-
