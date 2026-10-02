@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        SpinPlayer = false,
         KillAura = false, SpamGrab = false, Hitbox = false,
         AntiRag = true, AntiFling = false, AntiAFK = true, AntiVoid = false,
         EscapeGrab = false,
@@ -198,6 +199,7 @@ local function loadOreosHub()
         GrabTarget2 = "",
         GrabDistance = 3,
         AutoTargetRange = 50,
+        SpinSpeed = 30,
     }
 
     -- ============================================
@@ -356,7 +358,6 @@ local function loadOreosHub()
         if myHu.Health <= 0 then return false end
         if Toggles.SpamGrab then return false end
 
-        -- Find nearest player
         local closestDist = math.huge
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
@@ -371,7 +372,6 @@ local function loadOreosHub()
             end
         end
 
-        -- Track MY movement over the last 0.5s
         local now = tick()
         table.insert(myHistory, {t = now, pos = myHRP.Position})
         while #myHistory > 0 and now - myHistory[1].t > 0.5 do table.remove(myHistory, 1) end
@@ -383,7 +383,6 @@ local function loadOreosHub()
 
         local movingKeys = isMovingKeys()
 
-        -- GRABBED = server is moving us + we're not pressing keys + grabber is close
         return (not movingKeys) and myMove > 0.1 and closestDist < 3
     end
 
@@ -411,6 +410,36 @@ local function loadOreosHub()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
         myHistory = {}
         grabConfirmCount = 0
+    end
+
+    -- ============================================
+    -- 🌀 SPIN PLAYER SYSTEM
+    -- ============================================
+    local spinConn = nil
+    local spinAngle = 0
+
+    local function startSpin()
+        if spinConn then spinConn:Disconnect(); spinConn = nil end
+        spinAngle = 0
+
+        spinConn = RunService.Heartbeat:Connect(function(dt)
+            if not Toggles.SpinPlayer then return end
+            local ch = LocalPlayer.Character
+            if not ch then return end
+            local hrp = ch:FindFirstChild("HumanoidRootPart")
+            local hu = ch:FindFirstChildOfClass("Humanoid")
+            if not hrp or not hu then return end
+
+            spinAngle = spinAngle + (dt * Settings.SpinSpeed)
+            if spinAngle > math.pi * 2 then spinAngle = spinAngle - math.pi * 2 end
+
+            local pos = hrp.Position
+            hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, spinAngle, 0)
+        end)
+    end
+
+    local function stopSpin()
+        if spinConn then spinConn:Disconnect(); spinConn = nil end
     end
 
     -- ============================================
@@ -863,6 +892,11 @@ local function loadOreosHub()
         task.wait(0.5)
         hookCharacter(ch)
         if Toggles.SpeedFlyEnabled then applySpeed() end
+        if Toggles.SpinPlayer then
+            stopSpin()
+            task.wait(0.1)
+            startSpin()
+        end
     end)
 
     if LocalPlayer.Character then hookCharacter(LocalPlayer.Character) end
@@ -1327,6 +1361,37 @@ local function loadOreosHub()
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
 
     -- ============================================
+    -- 🌀 SPIN PLAYER
+    -- ============================================
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("Spin Player 🌀")
+
+    SettingsTab:CreateToggle({
+        Name = "🌀 Spin Fast",
+        CurrentValue = false,
+        Flag = "SpinPlayerToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.SpinPlayer = v
+            if v then startSpin() else stopSpin() end
+            sendWebhookLog("🌀 Spin Player", (v and "**Enabled** Spin Player" or "**Disabled** Spin Player"), v and 5763719 or 15548997)
+        end
+    })
+
+    SettingsTab:CreateSlider({
+        Name = "Spin Speed",
+        Range = {5, 120},
+        Increment = 5,
+        Suffix = "°/tick",
+        CurrentValue = 30,
+        Flag = "SpinSpeed",
+        Callback = function(v) Settings.SpinSpeed = v end
+    })
+
+    SettingsTab:CreateLabel("🌀 Spins your character in place at high speed")
+    SettingsTab:CreateLabel("⚠️ May look jittery on low-end devices")
+
+    -- ============================================
     -- SKYSAFE ZONE
     -- ============================================
     SettingsTab:CreateDivider()
@@ -1511,7 +1576,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 260, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Auto Escape Grab Working!"
+    updateTag.Text = "🆕 Spin Player + Auto Escape Grab"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
