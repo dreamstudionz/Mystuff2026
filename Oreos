@@ -307,9 +307,12 @@ local function loadOreosHub()
     local grabHookConn = nil
     local grabCooldown = 0
 
+    -- Track state: are we currently held by another player?
+    local wasGrabbed = false
+
     local function escapeFromGrab()
         if escapeGrabFlag then return end
-        if tick() - grabCooldown < 1 then return end
+        if tick() - grabCooldown < 1.5 then return end
         grabCooldown = tick()
         escapeGrabFlag = true
 
@@ -330,93 +333,38 @@ local function loadOreosHub()
 
         task.wait(0.5)
         escapeGrabFlag = false
+        wasGrabbed = false
     end
 
-    local function startEscapeGrab()
-        -- Disconnect any existing hooks
-        if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
-        if grabHookConn then grabHookConn:Disconnect(); grabHookConn = nil end
+    -- Detect if we are currently held by another player via a joint/weld
+    local function isHeldByOtherPlayer()
+        local ch = LocalPlayer.Character
+        if not ch then return false end
+        local myHRP = ch:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return false end
 
-        -- Hook the Grab remote's OnClientEvent — this fires when someone grabs YOU
-        if GrabRF then
-            grabHookConn = GrabRF.OnClientEvent:Connect(function(...)
-                if not Toggles.EscapeGrab then return end
-                if escapeGrabFlag then return end
-
-                local args = {...}
-                -- Check if any arg references us (player, character, or humanoid)
-                for _, a in ipairs(args) do
-                    if a == LocalPlayer
-                       or a == LocalPlayer.Character
-                       or (typeof(a) == "Instance" and a:IsDescendantOf(LocalPlayer.Character or workspace)) then
-                        escapeFromGrab()
-                        return
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("Weld") or v:IsA("WeldConstraint") or v:IsA("Motor6D")
+               or v:IsA("ManualWeld") or v:IsA("Snap") or v:IsA("Rotate") then
+                local p0, p1 = v.Part0, v.Part1
+                if p0 and p1 then
+                    local ourPart, theirPart
+                    if p0:IsDescendantOf(ch) then
+                        ourPart, theirPart = p0, p1
+                    elseif p1:IsDescendantOf(ch) then
+                        ourPart, theirPart = p1, p0
                     end
-                end
-
-                -- Fallback: if no args matched but event fired, and we ARE being held
-                -- (grabbed players usually have near-zero velocity + a weld from someone else)
-                local ch = LocalPlayer.Character
-                local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    for _, v in ipairs(ch:GetDescendants()) do
-                        if v:IsA("Weld") or v:IsA("WeldConstraint") or v:IsA("Motor6D") then
-                            local p0, p1 = v.Part0, v.Part1
-                            if p0 and p1 then
-                                local other
-                                if p0:IsDescendantOf(ch) then other = p1
-                                elseif p1:IsDescendantOf(ch) then other = p0 end
-                                if other then
-                                    local otherChar = other:FindFirstAncestorOfClass("Model")
-                                    if otherChar and otherChar ~= ch then
-                                        local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
-                                        if otherPlayer and otherPlayer ~= LocalPlayer then
-                                            escapeFromGrab()
-                                            return
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-
-        -- Keep a lightweight heartbeat as backup in case OnClientEvent doesn't include us as arg
-        escapeGrabConn = RunService.Heartbeat:Connect(function()
-            if not Toggles.EscapeGrab then return end
-            if escapeGrabFlag then return end
-            -- Don't trigger if we're the one grabbing
-            if Toggles.SpamGrab then return end
-
-            local ch = LocalPlayer.Character
-            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-            local hu = ch and ch:FindFirstChildOfClass("Humanoid")
-            if not hrp or not hu then return end
-
-            -- Only look for welds on our upper body / HRP (power grab signature)
-            for _, v in ipairs(ch:GetDescendants()) do
-                if v:IsA("Weld") or v:IsA("WeldConstraint") or v:IsA("Motor6D") then
-                    local p0, p1 = v.Part0, v.Part1
-                    if p0 and p1 then
-                        local ourSide, otherSide
-                        if p0:IsDescendantOf(ch) then ourSide, otherSide = p0, p1
-                        elseif p1:IsDescendantOf(ch) then ourSide, otherSide = p1, p0 end
-                        if ourSide and otherSide then
-                            local otherChar = otherSide:FindFirstAncestorOfClass("Model")
-                            if otherChar and otherChar ~= ch then
-                                local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
-                                if otherPlayer and otherPlayer ~= LocalPlayer then
-                                    local parentName = ourSide.Name:lower()
-                                    if parentName:find("torso")
-                                       or parentName:find("rootpart")
-                                       or parentName:find("upper") then
-                                        -- Locked in place = grabbed
-                                        if hrp.AssemblyLinearVelocity.Magnitude < 5 then
-                                            escapeFromGrab()
-                                            return
-                                        end
+                    if ourPart and theirPart and not theirPart:IsDescendantOf(ch) then
+                        local theirChar = theirPart:FindFirstAncestorOfClass("Model")
+                        if theirChar and theirChar ~= ch then
+                            local theirPlayer = Players:GetPlayerFromCharacter(theirChar)
+                            if theirPlayer and theirPlayer ~= LocalPlayer then
+                                -- Confirm they're actively grabbing us (alive + close)
+                                local theirHu = theirChar:FindFirstChildOfClass("Humanoid")
+                                if theirHu and theirHu.Health > 0 then
+                                    local dist = (theirPart.Position - myHRP.Position).Magnitude
+                                    if dist < 15 then
+                                        return true
                                     end
                                 end
                             end
@@ -424,12 +372,47 @@ local function loadOreosHub()
                     end
                 end
             end
+        end
+        return false
+    end
+
+    local function startEscapeGrab()
+        if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
+        if grabHookConn then grabHookConn:Disconnect(); grabHookConn = nil end
+
+        -- Hook the Grab remote's OnClientEvent as an extra signal
+        if GrabRF then
+            grabHookConn = GrabRF.OnClientEvent:Connect(function(...)
+                if not Toggles.EscapeGrab then return end
+                if escapeGrabFlag then return end
+                -- Small delay to let the weld appear, then check
+                task.wait(0.1)
+                if isHeldByOtherPlayer() then
+                    escapeFromGrab()
+                end
+            end)
+        end
+
+        -- Main detection: watch for the moment we transition from free -> held
+        escapeGrabConn = RunService.Heartbeat:Connect(function()
+            if not Toggles.EscapeGrab then return end
+            if escapeGrabFlag then return end
+            if Toggles.SpamGrab then return end
+
+            local grabbed = isHeldByOtherPlayer()
+
+            -- Rising edge: we just got grabbed
+            if grabbed and not wasGrabbed then
+                escapeFromGrab()
+            end
+            wasGrabbed = grabbed
         end)
     end
 
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
         if grabHookConn then grabHookConn:Disconnect(); grabHookConn = nil end
+        wasGrabbed = false
     end
 
     -- ============================================
@@ -1530,7 +1513,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 200, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 SkySafe Zone + Fixed Escape Grab"
+    updateTag.Text = "🆕 Improved Escape Grab"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
@@ -1671,3 +1654,4 @@ end
 -- ============================================
 createKeySystem()
 print("🔑 Key System Loaded")
+
