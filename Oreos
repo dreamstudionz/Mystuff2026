@@ -303,12 +303,13 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (GRAB_weld detection)
+    -- 🚨 ESCAPE GRAB SYSTEM (direction-aware GRAB_weld)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
     local grabCooldown = 0
     local grabConfirmCount = 0
+    local lastIGrabbedTime = 0
 
     local function escapeFromGrab(reason)
         if escapeGrabFlag then return end
@@ -337,12 +338,28 @@ local function loadOreosHub()
         grabConfirmCount = 0
     end
 
-    -- Detect if another player is grabbing US via a GRAB_weld
+    -- Direction-aware: returns true only if ANOTHER player's GRAB_weld connects INTO us.
+    -- If the weld is inside OUR character → we are the grabber → returns false.
     local function isGrabbedByOtherPlayer()
         local ch = LocalPlayer.Character
         if not ch then return false, nil end
 
-        -- Check every other player's character for a GRAB_weld that connects to us
+        -- 1. Do WE have a GRAB_weld inside our own character? → we're grabbing someone
+        local myGrab = ch:FindFirstChild("GRAB_weld", true)
+        if myGrab and (myGrab:IsA("Weld") or myGrab:IsA("WeldConstraint")) then
+            local p0 = myGrab.Part0
+            local p1 = myGrab.Part1
+            if p0 and p1 then
+                local other = p0:IsDescendantOf(ch) and p1 or p0
+                local otherChar = other:FindFirstAncestorOfClass("Model")
+                if otherChar and otherChar ~= ch then
+                    return false, nil
+                end
+            end
+            return false, nil
+        end
+
+        -- 2. Look for GRAB_weld inside OTHER players' characters pointing to us
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
@@ -359,26 +376,7 @@ local function loadOreosHub()
                             if (p0Theirs and p1Ours) or (p1Theirs and p0Ours) then
                                 return true, p.Name
                             end
-                        else
-                            return true, p.Name
                         end
-                    end
-                end
-            end
-        end
-
-        -- Also check OUR character for a GRAB_weld pointing to them
-        local myGrab = ch:FindFirstChild("GRAB_weld", true)
-        if myGrab and (myGrab:IsA("Weld") or myGrab:IsA("WeldConstraint")) then
-            local p0 = myGrab.Part0
-            local p1 = myGrab.Part1
-            if p0 and p1 then
-                local other = p0:IsDescendantOf(ch) and p1 or p0
-                local otherChar = other:FindFirstAncestorOfClass("Model")
-                if otherChar and otherChar ~= ch then
-                    local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
-                    if otherPlayer and otherPlayer ~= LocalPlayer then
-                        return true, otherPlayer.Name
                     end
                 end
             end
@@ -394,6 +392,7 @@ local function loadOreosHub()
         escapeGrabConn = RunService.Heartbeat:Connect(function()
             if not Toggles.EscapeGrab then return end
             if escapeGrabFlag then return end
+            if tick() - lastIGrabbedTime < 1.5 then return end
 
             local grabbed, grabberName = isGrabbedByOtherPlayer()
 
@@ -494,6 +493,7 @@ local function loadOreosHub()
                     else GrabRF:FireServer(targetPlayer) end
                 end)
             end
+            lastIGrabbedTime = tick()
         end
 
         local startTime = tick()
@@ -523,6 +523,7 @@ local function loadOreosHub()
                                 if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(p)
                                 else GrabRF:FireServer(p) end
                             end)
+                            lastIGrabbedTime = tick()
                         end
                         break
                     end
@@ -721,6 +722,7 @@ local function loadOreosHub()
                         else GrabRF:FireServer(t2) end
                     end)
                 end
+                lastIGrabbedTime = tick()
                 return
             end
             for _, p in Players:GetPlayers() do
@@ -729,6 +731,7 @@ local function loadOreosHub()
                         if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(p)
                         else GrabRF:FireServer(p) end
                     end)
+                    lastIGrabbedTime = tick()
                     break
                 end
             end
@@ -843,7 +846,8 @@ local function loadOreosHub()
             flyBodyGyro.Parent = hrp
 
             flyConn = RunService.Heartbeat:Connect(function()
-                if not Toggles.FlyActive then return end                local c = LocalPlayer.Character
+                if not Toggles.FlyActive then return end
+                local c = LocalPlayer.Character
                 local r = c and c:FindFirstChild("HumanoidRootPart")
                 local h = c and c:FindFirstChildOfClass("Humanoid")
                 if not r or not h then return end
@@ -1295,7 +1299,6 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets only when someone grabs YOU")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
@@ -1622,7 +1625,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Spin + Escape Grab Fixd"
+    updateTag.Text = "🆕 Escape Grab fixed + Spin bot"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
