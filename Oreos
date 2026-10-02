@@ -303,7 +303,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (AUTO - WORKING)
+    -- 🚨 ESCAPE GRAB SYSTEM (STRICTER - only real grabs)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
@@ -322,12 +322,12 @@ local function loadOreosHub()
             or UserInputService:IsKeyDown(Enum.KeyCode.Right)
     end
 
-    local function escapeFromGrab()
+    local function escapeFromGrab(reason)
         if escapeGrabFlag then return end
         if tick() - grabCooldown < 2 then return end
         grabCooldown = tick()
         escapeGrabFlag = true
-        print("[EscapeGrab] >>> RESETTING!")
+        print("[EscapeGrab] >>> RESETTING! Reason:", reason)
 
         local s = Instance.new("Sound")
         s.SoundId = "rbxassetid://9120386436"
@@ -384,7 +384,11 @@ local function loadOreosHub()
 
         local movingKeys = isMovingKeys()
 
-        return (not movingKeys) and myMove > 0.1 and closestDist < 3
+        -- STRICTER detection:
+        -- 1. Grabber must be VERY close (< 2 studs, almost overlapping)
+        -- 2. We must have moved a real distance (> 2 studs in 0.5s) — grabs drag you
+        -- 3. We must NOT be pressing keys
+        return (not movingKeys) and myMove > 2 and closestDist < 2
     end
 
     local function startEscapeGrab()
@@ -399,7 +403,7 @@ local function loadOreosHub()
             if checkGrab() then
                 grabConfirmCount = grabConfirmCount + 1
                 if grabConfirmCount >= 5 then
-                    escapeFromGrab()
+                    escapeFromGrab("detected grab")
                 end
             else
                 grabConfirmCount = 0
@@ -414,7 +418,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🌀 SPIN PLAYER SYSTEM (RenderStepped + unanchor — beats gym fight mode)
+    -- 🌀 SPIN PLAYER SYSTEM (RenderStepped — beats gym fight mode)
     -- ============================================
     local spinConn = nil
     local spinAngle = 0
@@ -430,19 +434,14 @@ local function loadOreosHub()
             local hrp = ch:FindFirstChild("HumanoidRootPart")
             if not hrp then return end
 
-            -- Un-anchor HRP if the game anchored it (fight mode)
-            if hrp.Anchored then
-                hrp.Anchored = false
-            end
+            if hrp.Anchored then hrp.Anchored = false end
 
-            -- Force humanoid to not fight our rotation
             local hu = ch:FindFirstChildOfClass("Humanoid")
             if hu then
                 if hu.AutoRotate then hu.AutoRotate = false end
                 if hu.PlatformStand then hu.PlatformStand = false end
             end
 
-            -- Spin
             spinAngle = spinAngle + (dt * Settings.SpinSpeed)
             if spinAngle > math.pi * 2 then spinAngle = spinAngle - math.pi * 2 end
 
@@ -453,7 +452,6 @@ local function loadOreosHub()
 
     local function stopSpin()
         if spinConn then spinConn:Disconnect(); spinConn = nil end
-        -- Restore AutoRotate
         local ch = LocalPlayer.Character
         if ch then
             local hu = ch:FindFirstChildOfClass("Humanoid")
@@ -1302,7 +1300,7 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets when you get grabbed")
+    ProtectionTab:CreateLabel("🚨 Auto-resets only on real grabs (not collisions)")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
@@ -1629,7 +1627,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Gym Spin Fix (RenderStepped)"
+    updateTag.Text = "🆕 Smarter Escape Grab"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
