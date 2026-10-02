@@ -1295,7 +1295,7 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets only when someone grabs YOU (GRAB_weld detect)")
+    ProtectionTab:CreateLabel("🚨 Auto-resets only when someone grabs YOU")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
