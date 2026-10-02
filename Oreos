@@ -186,7 +186,6 @@ local function loadOreosHub()
         KARange = 50, HitboxSize = 10,
         KATargets = Get("KATargets", ""),
         KASafe    = Get("KASafe", ""),
-        OutfitTarget = Get("OutfitTarget", ""),
         WalkSpeed = 50, FlySpeed = 100, FlyHoldTime = 0.15,
         BangTarget = "", BangSpeed = 1,
         BioColorMode = "black_white",
@@ -301,74 +300,26 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM
+    -- 🚨 ESCAPE GRAB SYSTEM (Power Grab only)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
-    local lastGrabCheck = 0
-
-    local function isGrabbed()
-        local ch = LocalPlayer.Character
-        if not ch then return false end
-        local myHRP = ch:FindFirstChild("HumanoidRootPart")
-        local hu = ch:FindFirstChildOfClass("Humanoid")
-        if not myHRP or not hu then return false end
-        if Toggles.SpamGrab then return false end
-
-        for _, v in pairs(ch:GetDescendants()) do
-            if v:IsA("WeldConstraint") or v:IsA("Weld") or v:IsA("Motor6D") or v:IsA("ManualWeld") then
-                local p0 = v.Part0
-                local p1 = v.Part1
-                if p0 and p1 then
-                    local ourSide, otherSide
-                    if p0:IsDescendantOf(ch) then ourSide = p0; otherSide = p1
-                    elseif p1:IsDescendantOf(ch) then ourSide = p1; otherSide = p0 end
-                    if ourSide and otherSide then
-                        local otherChar = otherSide:FindFirstAncestorOfClass("Model")
-                        if otherChar and otherChar ~= ch then
-                            local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
-                            if otherPlayer and otherPlayer ~= LocalPlayer then return true end
-                        end
-                    end
-                end
-            end
-        end
-
-        local state = hu:GetState()
-        if state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.PlatformStanding or state == Enum.HumanoidStateType.Ragdoll then
-            for _, p in Players:GetPlayers() do
-                if p ~= LocalPlayer and p.Character then
-                    local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                    if theirHRP and (theirHRP.Position - myHRP.Position).Magnitude < 3 then
-                        if myHRP.AssemblyLinearVelocity.Magnitude < 2 then return true end
-                    end
-                end
-            end
-        end
-
-        for _, p in Players:GetPlayers() do
-            if p ~= LocalPlayer and p.Character then
-                local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                if theirHRP and (theirHRP.Position - myHRP.Position).Magnitude < 1.2 then
-                    local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
-                    if theirHu and theirHu.Health > 0 and myHRP.AssemblyLinearVelocity.Magnitude < 1 then
-                        return true
-                    end
-                end
-            end
-        end
-        return false
-    end
+    local grabHookConn = nil
+    local grabCooldown = 0
 
     local function escapeFromGrab()
         if escapeGrabFlag then return end
+        if tick() - grabCooldown < 1 then return end
+        grabCooldown = tick()
         escapeGrabFlag = true
+
         local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://9120386436"
         sound.Volume = 7
         sound.Parent = game:GetService("SoundService")
         sound:Play()
         game:GetService("Debris"):AddItem(sound, 3)
+
         pcall(function()
             local ch = LocalPlayer.Character
             if ch then
@@ -376,24 +327,109 @@ local function loadOreosHub()
                 if hu and hu.Health > 0 then hu.Health = 0 end
             end
         end)
+
         task.wait(0.5)
         escapeGrabFlag = false
     end
 
     local function startEscapeGrab()
-        if escapeGrabConn then escapeGrabConn:Disconnect() end
+        -- Disconnect any existing hooks
+        if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
+        if grabHookConn then grabHookConn:Disconnect(); grabHookConn = nil end
+
+        -- Hook the Grab remote's OnClientEvent — this fires when someone grabs YOU
+        if GrabRF then
+            grabHookConn = GrabRF.OnClientEvent:Connect(function(...)
+                if not Toggles.EscapeGrab then return end
+                if escapeGrabFlag then return end
+
+                local args = {...}
+                -- Check if any arg references us (player, character, or humanoid)
+                for _, a in ipairs(args) do
+                    if a == LocalPlayer
+                       or a == LocalPlayer.Character
+                       or (typeof(a) == "Instance" and a:IsDescendantOf(LocalPlayer.Character or workspace)) then
+                        escapeFromGrab()
+                        return
+                    end
+                end
+
+                -- Fallback: if no args matched but event fired, and we ARE being held
+                -- (grabbed players usually have near-zero velocity + a weld from someone else)
+                local ch = LocalPlayer.Character
+                local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    for _, v in ipairs(ch:GetDescendants()) do
+                        if v:IsA("Weld") or v:IsA("WeldConstraint") or v:IsA("Motor6D") then
+                            local p0, p1 = v.Part0, v.Part1
+                            if p0 and p1 then
+                                local other
+                                if p0:IsDescendantOf(ch) then other = p1
+                                elseif p1:IsDescendantOf(ch) then other = p0 end
+                                if other then
+                                    local otherChar = other:FindFirstAncestorOfClass("Model")
+                                    if otherChar and otherChar ~= ch then
+                                        local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
+                                        if otherPlayer and otherPlayer ~= LocalPlayer then
+                                            escapeFromGrab()
+                                            return
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- Keep a lightweight heartbeat as backup in case OnClientEvent doesn't include us as arg
         escapeGrabConn = RunService.Heartbeat:Connect(function()
             if not Toggles.EscapeGrab then return end
             if escapeGrabFlag then return end
-            local now = tick()
-            if now - lastGrabCheck < 0.05 then return end
-            lastGrabCheck = now
-            if isGrabbed() then escapeFromGrab() end
+            -- Don't trigger if we're the one grabbing
+            if Toggles.SpamGrab then return end
+
+            local ch = LocalPlayer.Character
+            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+            local hu = ch and ch:FindFirstChildOfClass("Humanoid")
+            if not hrp or not hu then return end
+
+            -- Only look for welds on our upper body / HRP (power grab signature)
+            for _, v in ipairs(ch:GetDescendants()) do
+                if v:IsA("Weld") or v:IsA("WeldConstraint") or v:IsA("Motor6D") then
+                    local p0, p1 = v.Part0, v.Part1
+                    if p0 and p1 then
+                        local ourSide, otherSide
+                        if p0:IsDescendantOf(ch) then ourSide, otherSide = p0, p1
+                        elseif p1:IsDescendantOf(ch) then ourSide, otherSide = p1, p0 end
+                        if ourSide and otherSide then
+                            local otherChar = otherSide:FindFirstAncestorOfClass("Model")
+                            if otherChar and otherChar ~= ch then
+                                local otherPlayer = Players:GetPlayerFromCharacter(otherChar)
+                                if otherPlayer and otherPlayer ~= LocalPlayer then
+                                    local parentName = ourSide.Name:lower()
+                                    if parentName:find("torso")
+                                       or parentName:find("rootpart")
+                                       or parentName:find("upper") then
+                                        -- Locked in place = grabbed
+                                        if hrp.AssemblyLinearVelocity.Magnitude < 5 then
+                                            escapeFromGrab()
+                                            return
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end)
     end
 
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
+        if grabHookConn then grabHookConn:Disconnect(); grabHookConn = nil end
     end
 
     -- ============================================
@@ -413,94 +449,6 @@ local function loadOreosHub()
             end
         end
         return nil
-    end
-
-    -- ============================================
-    -- 👕 OUTFIT COPIER
-    -- ============================================
-    local function copyOutfitFrom(targetPlayer)
-        if not targetPlayer or not targetPlayer.Character then return false, "Target has no character" end
-        local myChar = LocalPlayer.Character
-        if not myChar then return false, "You have no character" end
-        local myHum = myChar:FindFirstChildOfClass("Humanoid")
-        local theirHum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if not myHum or not theirHum then return false, "Missing Humanoid" end
-
-        local theirBodyColors = targetPlayer.Character:FindFirstChildOfClass("BodyColors")
-        if theirBodyColors then
-            local mine = myChar:FindFirstChildOfClass("BodyColors")
-            if mine then mine:Destroy() end
-            theirBodyColors:Clone().Parent = myChar
-        end
-
-        for _, class in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
-            local theirs = targetPlayer.Character:FindFirstChildOfClass(class)
-            local mine = myChar:FindFirstChildOfClass(class)
-            if theirs then
-                if mine then mine:Destroy() end
-                local clone = theirs:Clone()
-                clone.Parent = myChar
-            elseif mine then
-                mine:Destroy()
-            end
-        end
-
-        for _, partName in ipairs({
-            "Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg",
-            "UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm",
-            "RightUpperArm","RightLowerArm","LeftUpperLeg","LeftLowerLeg",
-            "RightUpperLeg","RightLowerLeg","LeftFoot","RightFoot","LeftHand","RightHand"
-        }) do
-            local theirPart = targetPlayer.Character:FindFirstChild(partName)
-            local myPart = myChar:FindFirstChild(partName)
-            if theirPart and myPart then
-                local theirMesh = theirPart:FindFirstChildOfClass("SpecialMesh")
-                local myMesh = myPart:FindFirstChildOfClass("SpecialMesh")
-                if theirMesh then
-                    if not myMesh then
-                        myMesh = Instance.new("SpecialMesh")
-                        myMesh.Parent = myPart
-                    end
-                    myMesh.MeshType = theirMesh.MeshType
-                    myMesh.MeshId = theirMesh.MeshId
-                    myMesh.TextureId = theirMesh.TextureId
-                    myMesh.Scale = theirMesh.Scale
-                elseif myMesh then
-                    myMesh:Destroy()
-                end
-                pcall(function() myPart.Size = theirPart.Size end)
-                pcall(function() myPart.Color = theirPart.Color end)
-            end
-        end
-
-        for _, acc in ipairs(myChar:GetChildren()) do
-            if acc:IsA("Accessory") then acc:Destroy() end
-        end
-        for _, acc in ipairs(targetPlayer.Character:GetChildren()) do
-            if acc:IsA("Accessory") then
-                local clone = acc:Clone()
-                clone.Parent = myChar
-            end
-        end
-
-        local theirHead = targetPlayer.Character:FindFirstChild("Head")
-        local myHead = myChar:FindFirstChild("Head")
-        if theirHead and myHead then
-            local theirFace = theirHead:FindFirstChildOfClass("Decal")
-            local myFace = myHead:FindFirstChildOfClass("Decal")
-            if theirFace then
-                if not myFace then
-                    myFace = Instance.new("Decal")
-                    myFace.Name = "face"
-                    myFace.Parent = myHead
-                end
-                myFace.Texture = theirFace.Texture
-            elseif myFace then
-                myFace:Destroy()
-            end
-        end
-
-        return true, "Outfit copied from " .. targetPlayer.Name
     end
 
     local function teleportAndGrab(targetPlayer)
@@ -1205,124 +1153,6 @@ local function loadOreosHub()
         end
     })
 
-    -- OUTFIT TAB
-    local OutfitTab = Window:CreateTab("Outfit 🍪")
-    OutfitTab:CreateSection("Pick from Server Players")
-
-    local function getServerPlayers()
-        local list = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer then
-                table.insert(list, p.Name)
-            end
-        end
-        if #list == 0 then table.insert(list, "No other players") end
-        return list
-    end
-
-    local outfitDropdown
-    outfitDropdown = OutfitTab:CreateDropdown({
-        Name = "Players in Server",
-        Options = getServerPlayers(),
-        CurrentOption = { "Select a player" },
-        MultipleOptions = false,
-        Flag = "OutfitDropdown",
-        Callback = function(selected)
-            if selected and selected[1] and selected[1] ~= "No other players" and selected[1] ~= "Select a player" then
-                Settings.OutfitTarget = selected[1]
-            end
-        end
-    })
-
-    OutfitTab:CreateButton({
-        Name = "🔄 Refresh Player List",
-        Callback = function()
-            PlayClickSound()
-            if outfitDropdown then
-                outfitDropdown:Refresh(getServerPlayers())
-            end
-        end
-    })
-
-    OutfitTab:CreateSection("Or Type Username Manually")
-    OutfitTab:CreateInput({
-        Name = "Player Username",
-        PlaceholderText = "Enter exact username",
-        RemoveTextAfterFocusLost = false,
-        CurrentValue = Settings.OutfitTarget or "",
-        Callback = function(text)
-            Settings.OutfitTarget = text
-        end
-    })
-
-    OutfitTab:CreateSection("Actions")
-    OutfitTab:CreateButton({
-        Name = "👕 Change Outfit",
-        Callback = function()
-            PlayClickSound()
-            local name = Settings.OutfitTarget
-            if not name or name == "" then
-                Rayfield:Notify({
-                    Title = "👕 Outfit",
-                    Content = "Pick a player or type a username first",
-                    Duration = 3,
-                    Image = 4483362458
-                })
-                return
-            end
-            local target = findPlayerByName(name)
-            if not target then
-                Rayfield:Notify({
-                    Title = "👕 Outfit",
-                    Content = "Player '" .. name .. "' not found in this server",
-                    Duration = 3,
-                    Image = 4483362458
-                })
-                return
-            end
-            local ok, msg = copyOutfitFrom(target)
-            Rayfield:Notify({
-                Title = "👕 Outfit",
-                Content = ok and ("Copied outfit from " .. target.Name) or ("Failed: " .. tostring(msg)),
-                Duration = 3,
-                Image = 4483362458
-            })
-            sendWebhookLog("👕 Outfit Copy",
-                ok and ("Copied outfit from **" .. target.Name .. "**") or ("Failed: " .. tostring(msg)),
-                ok and 5763719 or 15548997)
-        end
-    })
-
-    OutfitTab:CreateButton({
-        Name = "🔄 Reset to My Avatar",
-        Callback = function()
-            PlayClickSound()
-            local myChar = LocalPlayer.Character
-            if not myChar then
-                Rayfield:Notify({
-                    Title = "👕 Outfit",
-                    Content = "You have no character",
-                    Duration = 3,
-                    Image = 4483362458
-                })
-                return
-            end
-            pcall(function()
-                LocalPlayer:LoadCharacter()
-            end)
-            Rayfield:Notify({
-                Title = "👕 Outfit",
-                Content = "Resetting to your own avatar...",
-                Duration = 3,
-                Image = 4483362458
-            })
-            sendWebhookLog("🔄 Outfit Reset", "Player reset their outfit to their own avatar", 5763719)
-        end
-    })
-
-    OutfitTab:CreateLabel("💡 Pick a player from the dropdown or type a username")
-    OutfitTab:CreateLabel("⚠️ Outfit is only visible on YOUR screen — not to others")
-
     -- GLOWING BIO TAB
     local GlowBioTab = Window:CreateTab("Glowing Bio 🍪")
     GlowBioTab:CreateSection("Bio Text")
@@ -1438,7 +1268,7 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets when grabbed BY someone else")
+    ProtectionTab:CreateLabel("🚨 Auto-resets only when grabbed by Power Grab")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
@@ -1492,6 +1322,7 @@ local function loadOreosHub()
     -- SETTINGS TAB
     -- ============================================
     local SettingsTab = Window:CreateTab("Settings 🍪")
+
     SettingsTab:CreateSection("Server")
 
     SettingsTab:CreateButton({
@@ -1513,6 +1344,144 @@ local function loadOreosHub()
     })
 
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
+
+    -- ============================================
+    -- SKYSAFE ZONE
+    -- ============================================
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("SkySafe Zone ☁️")
+
+    local skySafeEnabled = false
+    local skyPlatform = nil
+    local skyOriginalPos = nil
+    local skyHeartbeatConn = nil
+    local SKY_HEIGHT = 500
+
+    local function createSkyPlatform()
+        local plat = Instance.new("Part")
+        plat.Name = "Oreo_SkySafe"
+        plat.Size = Vector3.new(200, 1, 200)
+        plat.Anchored = true
+        plat.CanCollide = true
+        plat.Transparency = 1
+        plat.CanQuery = false
+        plat.CanTouch = false
+        plat.Material = Enum.Material.SmoothPlastic
+        plat.Parent = workspace
+
+        local outline = Instance.new("SelectionBox")
+        outline.Name = "SkyOutline"
+        outline.Adornee = plat
+        outline.LineThickness = 0.1
+        outline.Color3 = Color3.fromRGB(120, 200, 255)
+        outline.Transparency = 0.7
+        outline.Parent = plat
+
+        return plat
+    end
+
+    local function enableSkySafe()
+        local myChar = LocalPlayer.Character
+        local hrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            Rayfield:Notify({
+                Title = "☁️ SkySafe",
+                Content = "You need a character first",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        skyOriginalPos = hrp.CFrame
+
+        if skyPlatform then skyPlatform:Destroy() end
+        skyPlatform = createSkyPlatform()
+        skyPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z)
+        hrp.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+
+        if skyHeartbeatConn then skyHeartbeatConn:Disconnect() end
+        skyHeartbeatConn = RunService.Heartbeat:Connect(function()
+            if not skySafeEnabled then return end
+            local ch = LocalPlayer.Character
+            local r = ch and ch:FindFirstChild("HumanoidRootPart")
+            if not r or not skyPlatform then return end
+            if r.Position.Y < skyPlatform.Position.Y - 10 then
+                r.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+                r.AssemblyLinearVelocity = Vector3.zero
+            end
+        end)
+
+        Rayfield:Notify({
+            Title = "☁️ SkySafe",
+            Content = "You're safe in the sky!",
+            Duration = 4,
+            Image = 4483362458
+        })
+        sendWebhookLog("☁️ SkySafe", "Enabled SkySafe Zone", 5763719)
+    end
+
+    local function disableSkySafe()
+        if skyHeartbeatConn then
+            skyHeartbeatConn:Disconnect()
+            skyHeartbeatConn = nil
+        end
+        if skyPlatform then
+            skyPlatform:Destroy()
+            skyPlatform = nil
+        end
+        local ch = LocalPlayer.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp and skyOriginalPos then
+            pcall(function()
+                hrp.CFrame = skyOriginalPos
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end)
+        end
+        skyOriginalPos = nil
+        Rayfield:Notify({
+            Title = "☁️ SkySafe",
+            Content = "SkySafe disabled — returned to ground",
+            Duration = 3,
+            Image = 4483362458
+        })
+        sendWebhookLog("☁️ SkySafe", "Disabled SkySafe Zone", 15548997)
+    end
+
+    SettingsTab:CreateToggle({
+        Name = "☁️ SkySafe Zone (Safe in the sky)",
+        CurrentValue = false,
+        Flag = "SkySafeToggle",
+        Callback = function(v)
+            PlayClickSound()
+            skySafeEnabled = v
+            if v then enableSkySafe() else disableSkySafe() end
+        end
+    })
+
+    SettingsTab:CreateLabel("⬆️ Teleports you high in the sky on an invisible platform")
+    SettingsTab:CreateLabel("🏃 You can walk & run freely on it")
+    SettingsTab:CreateLabel("🔒 Nobody else can see or reach the platform")
+    SettingsTab:CreateLabel("⚠️ Strict anti-cheat games may still detect you")
+
+    SettingsTab:CreateSlider({
+        Name = "Sky Height",
+        Range = {100, 2000},
+        Increment = 50,
+        Suffix = "studs",
+        CurrentValue = 500,
+        Flag = "SkyHeight",
+        Callback = function(v)
+            SKY_HEIGHT = v
+            if skySafeEnabled and skyPlatform then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    skyPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z)
+                    hrp.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+                end
+            end
+        end
+    })
 
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("About")
@@ -1561,7 +1530,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 200, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Outfit + Settings Tabs Added"
+    updateTag.Text = "🆕 SkySafe Zone + Fixed Escape Grab"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
