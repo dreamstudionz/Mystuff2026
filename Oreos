@@ -303,7 +303,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (direction-aware GRAB_weld)
+    -- 🚨 ESCAPE GRAB SYSTEM (bulletproof GRAB_weld detection)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
@@ -338,28 +338,20 @@ local function loadOreosHub()
         grabConfirmCount = 0
     end
 
-    -- Direction-aware: returns true only if ANOTHER player's GRAB_weld connects INTO us.
-    -- If the weld is inside OUR character → we are the grabber → returns false.
+    -- Direction-aware: only fires when ANOTHER player is grabbing US.
+    -- The game puts a GRAB_weld inside the GRABBER's character. So:
+    --   - If OUR character has a GRAB_weld → WE are grabbing → return false
+    --   - Only if OUR character is clean AND their char has a GRAB_weld → we're being grabbed
     local function isGrabbedByOtherPlayer()
         local ch = LocalPlayer.Character
         if not ch then return false, nil end
 
-        -- 1. Do WE have a GRAB_weld inside our own character? → we're grabbing someone
-        local myGrab = ch:FindFirstChild("GRAB_weld", true)
-        if myGrab and (myGrab:IsA("Weld") or myGrab:IsA("WeldConstraint")) then
-            local p0 = myGrab.Part0
-            local p1 = myGrab.Part1
-            if p0 and p1 then
-                local other = p0:IsDescendantOf(ch) and p1 or p0
-                local otherChar = other:FindFirstAncestorOfClass("Model")
-                if otherChar and otherChar ~= ch then
-                    return false, nil
-                end
-            end
+        -- ABSOLUTE RULE: any GRAB_weld inside our own character = we are the grabber
+        if ch:FindFirstChild("GRAB_weld", true) then
             return false, nil
         end
 
-        -- 2. Look for GRAB_weld inside OTHER players' characters pointing to us
+        -- Otherwise check if anyone else has a GRAB_weld pointing at us
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
