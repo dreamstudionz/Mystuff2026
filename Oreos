@@ -200,6 +200,7 @@ local function loadOreosHub()
         GrabDistance = 3,
         AutoTargetRange = 50,
         SpinSpeed = 30,
+        GymPosition = Vector3.new(-107.13987731933594, 4.336757183074951, 580.064208984375),
     }
 
     -- ============================================
@@ -1361,6 +1362,40 @@ local function loadOreosHub()
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
 
     -- ============================================
+    -- 🏋️ TELEPORT TO GYM
+    -- ============================================
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("Teleport 🏋️")
+
+    SettingsTab:CreateButton({
+        Name = "🏋️ Teleport to Gym",
+        Callback = function()
+            PlayClickSound()
+            local ch = LocalPlayer.Character
+            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                Rayfield:Notify({
+                    Title = "🏋️ Gym Teleport",
+                    Content = "You need a character first",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+                return
+            end
+            hrp.CFrame = CFrame.new(Settings.GymPosition)
+            Rayfield:Notify({
+                Title = "🏋️ Gym Teleport",
+                Content = "Teleported to the gym!",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🏋️ Gym Teleport", "Player teleported to the gym", 5763719)
+        end
+    })
+
+    SettingsTab:CreateLabel("🏋️ Instantly teleports you to the gym fighting area")
+
+    -- ============================================
     -- 🌀 SPIN PLAYER
     -- ============================================
     SettingsTab:CreateDivider()
@@ -1573,10 +1608,10 @@ local function createKeySystem()
     stroke.Parent = frame
 
     local updateTag = Instance.new("TextLabel")
-    updateTag.Size = UDim2.new(0, 260, 0, 12)
+    updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Spin Player + Auto Escape Grab"
+    updateTag.Text = "🆕 Gym Teleport + Spin Player"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
