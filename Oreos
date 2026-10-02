@@ -198,7 +198,6 @@ local function loadOreosHub()
         GrabTarget2 = "",
         GrabDistance = 3,
         AutoTargetRange = 50,
-        EscapeSensitivity = 3,
     }
 
     -- ============================================
@@ -301,14 +300,13 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🚨 ESCAPE GRAB SYSTEM (AUTO - working detection)
+    -- 🚨 ESCAPE GRAB SYSTEM (AUTO - WORKING)
     -- ============================================
     local escapeGrabConn = nil
     local escapeGrabFlag = false
     local grabCooldown = 0
-    local lastGrabbedState = false
     local myHistory = {}
-    local theirHistory = {}
+    local grabConfirmCount = 0
 
     local function isMovingKeys()
         return UserInputService:IsKeyDown(Enum.KeyCode.W)
@@ -321,12 +319,12 @@ local function loadOreosHub()
             or UserInputService:IsKeyDown(Enum.KeyCode.Right)
     end
 
-    local function escapeFromGrab(reason)
+    local function escapeFromGrab()
         if escapeGrabFlag then return end
         if tick() - grabCooldown < 2 then return end
         grabCooldown = tick()
         escapeGrabFlag = true
-        print("[EscapeGrab] Reset! " .. reason)
+        print("[EscapeGrab] >>> RESETTING!")
 
         local s = Instance.new("Sound")
         s.SoundId = "rbxassetid://9120386436"
@@ -345,12 +343,11 @@ local function loadOreosHub()
 
         task.wait(0.5)
         escapeGrabFlag = false
-        lastGrabbedState = false
         myHistory = {}
-        theirHistory = {}
+        grabConfirmCount = 0
     end
 
-    local function isHeldByOtherPlayer()
+    local function checkGrab()
         local ch = LocalPlayer.Character
         if not ch then return false end
         local myHRP = ch:FindFirstChild("HumanoidRootPart")
@@ -361,7 +358,6 @@ local function loadOreosHub()
 
         -- Find nearest player
         local closestDist = math.huge
-        local closestHRP = nil
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
@@ -370,71 +366,51 @@ local function loadOreosHub()
                     local d = (theirHRP.Position - myHRP.Position).Magnitude
                     if d < closestDist then
                         closestDist = d
-                        closestHRP = theirHRP
                     end
                 end
             end
         end
 
-        if not closestHRP then return false end
-
-        -- Track positions over last 0.5s
+        -- Track MY movement over the last 0.5s
         local now = tick()
         table.insert(myHistory, {t = now, pos = myHRP.Position})
-        table.insert(theirHistory, {t = now, pos = closestHRP.Position})
         while #myHistory > 0 and now - myHistory[1].t > 0.5 do table.remove(myHistory, 1) end
-        while #theirHistory > 0 and now - theirHistory[1].t > 0.5 do table.remove(theirHistory, 1) end
 
         local myMove = 0
-        local theirMove = 0
         if #myHistory >= 2 then
             myMove = (myHistory[#myHistory].pos - myHistory[1].pos).Magnitude
         end
-        if #theirHistory >= 2 then
-            theirMove = (theirHistory[#theirHistory].pos - theirHistory[1].pos).Magnitude
-        end
 
         local movingKeys = isMovingKeys()
-        local iAmBeingMoved = myMove > 0.05
-        local theyAreMoving = theirMove > 0.05
-        local veryClose = closestDist < Settings.EscapeSensitivity
 
-        -- GRABBED = server is moving us + we're not pressing keys + they're close + they're moving
-        return (not movingKeys) and iAmBeingMoved and theyAreMoving and veryClose
+        -- GRABBED = server is moving us + we're not pressing keys + grabber is close
+        return (not movingKeys) and myMove > 0.1 and closestDist < 3
     end
 
     local function startEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
         myHistory = {}
-        theirHistory = {}
+        grabConfirmCount = 0
 
         escapeGrabConn = RunService.Heartbeat:Connect(function()
             if not Toggles.EscapeGrab then return end
             if escapeGrabFlag then return end
 
-            local grabbed = isHeldByOtherPlayer()
-
-            if grabbed and not lastGrabbedState then
-                -- Confirm over 5 frames to eliminate flukes
-                local confirmed = 0
-                for i = 1, 5 do
-                    RunService.Heartbeat:Wait()
-                    if not isHeldByOtherPlayer() then break end
-                    confirmed = confirmed + 1
+            if checkGrab() then
+                grabConfirmCount = grabConfirmCount + 1
+                if grabConfirmCount >= 5 then
+                    escapeFromGrab()
                 end
-                if confirmed >= 5 then
-                    escapeFromGrab("detected grab")
-                end
+            else
+                grabConfirmCount = 0
             end
-            lastGrabbedState = grabbed
         end)
     end
 
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
-        lastGrabbedState = false
         myHistory = {}
-        theirHistory = {}
+        grabConfirmCount = 0
     end
 
     -- ============================================
@@ -1273,13 +1249,7 @@ local function loadOreosHub()
             sendWebhookLog("🚨 Escape Grab", (v and "**Enabled** Escape Grab" or "**Disabled** Escape Grab"), v and 5763719 or 15548997)
         end
     })
-    ProtectionTab:CreateLabel("🚨 Auto-resets when you get grabbed (server-forced movement)")
-    ProtectionTab:CreateSlider({
-        Name = "Escape Sensitivity (studs)", Range = {1, 6}, Increment = 1,
-        CurrentValue = 3, Flag = "EscapeSensitivity",
-        Callback = function(v) Settings.EscapeSensitivity = v end
-    })
-    ProtectionTab:CreateLabel("⬆️ Higher = more sensitive (may false-trigger)")
+    ProtectionTab:CreateLabel("🚨 Auto-resets when you get grabbed")
 
     -- UTILITY TAB
     local UtilityTab = Window:CreateTab("Utility 🍪")
