@@ -691,7 +691,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 📏 PLAYER DISTANCE DISPLAY
+    -- 📏 PLAYER DISTANCE DISPLAY (with username)
     -- ============================================
     local distanceConn = nil
     local distanceLabels = {}
@@ -705,7 +705,7 @@ local function loadOreosHub()
 
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "Oreo_DistanceLabel"
-        billboard.Size = UDim2.new(0, 100, 0, 30)
+        billboard.Size = UDim2.new(0, 180, 0, 40)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
         billboard.LightInfluence = 0
@@ -721,14 +721,30 @@ local function loadOreosHub()
         bg.Parent = billboard
         Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
 
+        -- Username (top line)
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "NameText"
+        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLabel.Position = UDim2.new(0, 0, 0, 0)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.DisplayName ~= "" and player.DisplayName or player.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 14
+        nameLabel.TextStrokeTransparency = 0
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.Parent = bg
+
+        -- Distance (bottom line)
         local text = Instance.new("TextLabel")
         text.Name = "DistanceText"
-        text.Size = UDim2.new(1, 0, 1, 0)
+        text.Size = UDim2.new(1, 0, 0.5, 0)
+        text.Position = UDim2.new(0, 0, 0.5, 0)
         text.BackgroundTransparency = 1
         text.Text = "0 studs"
         text.TextColor3 = Color3.fromRGB(255, 255, 255)
         text.Font = Enum.Font.GothamBold
-        text.TextSize = 14
+        text.TextSize = 13
         text.TextStrokeTransparency = 0
         text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         text.Parent = bg
@@ -776,18 +792,27 @@ local function loadOreosHub()
             end
 
             local dist = (theirHRP.Position - myHRP.Position).Magnitude
-            local textLabel = label:FindFirstChild("BG") and label.BG:FindFirstChild("DistanceText")
-            if textLabel then
-                textLabel.Text = string.format("%d studs", math.floor(dist))
+            local bg = label:FindFirstChild("BG")
+            if bg then
+                local nameLabel = bg:FindFirstChild("NameText")
+                local textLabel = bg:FindFirstChild("DistanceText")
 
-                if dist < 10 then
-                    textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-                elseif dist < 30 then
-                    textLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-                elseif dist < 100 then
-                    textLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-                else
-                    textLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+                if nameLabel then
+                    nameLabel.Text = p.DisplayName ~= "" and p.DisplayName or p.Name
+                end
+
+                if textLabel then
+                    textLabel.Text = string.format("%d studs", math.floor(dist))
+
+                    if dist < 10 then
+                        textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                    elseif dist < 30 then
+                        textLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+                    elseif dist < 100 then
+                        textLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    else
+                        textLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+                    end
                 end
             end
         end
@@ -1988,8 +2013,8 @@ local function loadOreosHub()
         end
     })
 
-    SettingsTab:CreateLabel("📏 Shows stud distance above every player's head")
-    SettingsTab:CreateLabel("🔴 Red < 10 | 🟡 Yellow < 30 | 🟢 Green < 100 | ⚪ Gray far")
+    SettingsTab:CreateLabel("📏 Shows username + stud distance above every player's head")
+    SettingsTab:CreateLabel("🟡 Name in gold | Distance color: 🔴<10 🟡<30 🟢<100 ⚪far")
     SettingsTab:CreateLabel("⚠️ Visual only — nobody else sees it")
 
     SettingsTab:CreateDivider()
@@ -2170,7 +2195,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Distance Display + 12 Colors"
+    updateTag.Text = "🆕 Name + Distance Labels"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
