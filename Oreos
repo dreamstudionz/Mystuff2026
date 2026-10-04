@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        DragToGym = false,
         AutoExitLowHP = false,
         DisableFightMode = false,
         SpinPlayer = false,
@@ -207,6 +208,9 @@ local function loadOreosHub()
         AutoExitReturnHP = 60,
         AutoExitSkyHeight = 500,
         TargetUsername = "",
+        DragStepDistance = 15,
+        DragGrabRange = 20,
+        DragUsername = "",
     }
 
     -- ============================================
@@ -430,6 +434,214 @@ local function loadOreosHub()
     end
 
     -- ============================================
+    -- 🎯 DRAG TO GYM SYSTEM (button-triggered)
+    -- ============================================
+    local dragRunning = false
+
+    local function findPlayerByName(name)
+        if not name or name == "" then return nil end
+        name = name:lower()
+        for _, p in Players:GetPlayers() do
+            if p ~= LocalPlayer then
+                if p.Name:lower() == name or p.DisplayName:lower() == name then return p end
+            end
+        end
+        for _, p in Players:GetPlayers() do
+            if p ~= LocalPlayer then
+                if p.Name:lower():find(name, 1, true) or p.DisplayName:lower():find(name, 1, true) then return p end
+            end
+        end
+        return nil
+    end
+
+    local function isInsideArena(hrp)
+        if not hrp then return false end
+        local gymPos = Settings.GymPosition
+        return (hrp.Position - gymPos).Magnitude < 60
+    end
+
+    local function dragPlayerToGym()
+        if dragRunning then
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = "Already dragging, wait...",
+                Duration = 2,
+                Image = 4483362458
+            })
+            return
+        end
+
+        local target = nil
+        if Settings.DragUsername and Settings.DragUsername ~= "" then
+            target = findPlayerByName(Settings.DragUsername)
+            if not target then
+                Rayfield:Notify({
+                    Title = "🎯 Drag to Gym",
+                    Content = "Player '" .. Settings.DragUsername .. "' not found",
+                    Duration = 3,
+                    Image = 4483362458
+                })
+                return
+            end
+        else
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = "Type a username first",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        if not target.Character then
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = target.Name .. " has no character",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        local targetHu = target.Character:FindFirstChildOfClass("Humanoid")
+        if not targetHRP or not targetHu or targetHu.Health <= 0 then
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = target.Name .. " is not alive",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = "You need a character first",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        if isInsideArena(targetHRP) then
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = target.Name .. " is already in the gym",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        dragRunning = true
+        print("[DragToGym] Starting drag on", target.Name)
+
+        Rayfield:Notify({
+            Title = "🎯 Drag to Gym",
+            Content = "Dragging " .. target.Name .. "...",
+            Duration = 3,
+            Image = 4483362458
+        })
+
+        task.spawn(function()
+            local gymPos = Settings.GymPosition
+
+            -- Step 1: Teleport next to them
+            local offset = Vector3.new(3, 0, 3)
+            pcall(function()
+                myHRP.CFrame = CFrame.new(targetHRP.Position + offset, targetHRP.Position)
+                myHRP.AssemblyLinearVelocity = Vector3.zero
+            end)
+            task.wait(0.15)
+
+            -- Step 2: Fire grab to lock them
+            if GrabRF then
+                for _ = 1, 10 do
+                    pcall(function()
+                        if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(target)
+                        else GrabRF:FireServer(target) end
+                    end)
+                end
+                lastIGrabbedTime = tick()
+            end
+            task.wait(0.1)
+
+            -- Step 3: Walk them to gym
+            local maxSteps = 40
+            local stepCount = 0
+
+            while stepCount < maxSteps do
+                if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+                    print("[DragToGym] Target lost mid-drag")
+                    break
+                end
+
+                targetHRP = target.Character.HumanoidRootPart
+                local distToGym = (targetHRP.Position - gymPos).Magnitude
+
+                if distToGym < 10 then
+                    print("[DragToGym] Arrived at gym")
+                    break
+                end
+
+                local direction = (gymPos - targetHRP.Position).Unit
+                local stepSize = math.min(Settings.DragStepDistance, distToGym)
+                local newTargetPos = targetHRP.Position + direction * stepSize
+
+                if GrabRF then
+                    for _ = 1, 3 do
+                        pcall(function()
+                            if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(target)
+                            else GrabRF:FireServer(target) end
+                        end)
+                    end
+                    lastIGrabbedTime = tick()
+                end
+
+                pcall(function()
+                    targetHRP.CFrame = CFrame.new(newTargetPos, newTargetPos + direction)
+                    targetHRP.AssemblyLinearVelocity = Vector3.zero
+                end)
+
+                pcall(function()
+                    myHRP.CFrame = CFrame.new(newTargetPos - direction * 3, newTargetPos)
+                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                end)
+
+                stepCount = stepCount + 1
+                task.wait(0.05)
+            end
+
+            -- Step 4: Final snap
+            if target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                pcall(function()
+                    target.Character.HumanoidRootPart.CFrame = CFrame.new(gymPos + Vector3.new(0, 3, 0))
+                    target.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                end)
+                pcall(function()
+                    myHRP.CFrame = CFrame.new(gymPos + Vector3.new(0, 3, 5))
+                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                end)
+            end
+
+            print("[DragToGym] ✅ Done")
+            Rayfield:Notify({
+                Title = "🎯 Drag to Gym",
+                Content = target.Name .. " delivered to the gym!",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🎯 Drag to Gym", "Dragged **" .. target.Name .. "** to the gym", 5763719)
+
+            dragRunning = false
+        end)
+    end
+
+    -- ============================================
     -- 🚨 AUTO EXIT ON LOW HP (SkySafe + Return)
     -- ============================================
     local autoExitConn = nil
@@ -565,100 +777,55 @@ local function loadOreosHub()
     -- 🌐 TELEPORT TO PLAYER'S SERVER
     -- ============================================
     local TeleportService = game:GetService("TeleportService")
-    local HttpService2 = game:GetService("HttpService")
 
     local function teleportToPlayerServer(username)
         if not username or username == "" then
-            Rayfield:Notify({
-                Title = "🌐 Server Hop",
-                Content = "Please enter a username first",
-                Duration = 3,
-                Image = 4483362458
-            })
+            Rayfield:Notify({ Title = "🌐 Server Hop", Content = "Enter a username first", Duration = 3, Image = 4483362458 })
             return
         end
 
-        Rayfield:Notify({
-            Title = "🌐 Server Hop",
-            Content = "Looking up " .. username .. "...",
-            Duration = 3,
-            Image = 4483362458
-        })
+        Rayfield:Notify({ Title = "🌐 Server Hop", Content = "Looking up " .. username .. "...", Duration = 3, Image = 4483362458 })
 
         task.spawn(function()
-            local success, err = pcall(function()
-                -- Get user ID from username
+            local ok, err = pcall(function()
                 local userId = Players:GetUserIdFromNameAsync(username)
+                print("[ServerHop] UserId:", userId)
 
-                -- API endpoints to try (in order)
-                local endpoints = {
-                    -- Main API with presence
-                    "https://presence.roblox.com/v1/presence/users",
-                    -- Alternative
-                    "https://users.roblox.com/v1/users/" .. tostring(userId),
-                }
+                local body = HttpService:JSONEncode({ userIds = { userId } })
+                local req = syn and syn.request or http_request or request
+                if not req then error("No HTTP function available") end
 
-                -- First, try presence API to get the game + job id
-                local presenceUrl = "https://presence.roblox.com/v1/presence/users"
-                local body = HttpService2:JSONEncode({ userIds = { userId } })
-
-                local response = syn and syn.request or http_request or request
-                if not response then
-                    error("No HTTP function available")
-                end
-
-                local res = response({
-                    Url = presenceUrl,
+                local res = req({
+                    Url = "https://presence.roblox.com/v1/presence/users",
                     Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    },
+                    Headers = { ["Content-Type"] = "application/json" },
                     Body = body
                 })
 
-                local data = HttpService2:JSONDecode(res.Body)
+                print("[ServerHop] Raw:", res.Body)
+
+                local data = HttpService:JSONDecode(res.Body)
                 local presence = data.userPresences and data.userPresences[1]
-
-                if not presence then
-                    error("Could not get presence")
+                if not presence or not presence.placeId or not presence.gameId then
+                    error("Player not in a joinable game (privacy or offline)")
                 end
 
-                local placeId = presence.placeId
-                local gameId = presence.gameId
-                local rootPlaceId = presence.rootPlaceId
+                print("[ServerHop] Teleporting to", presence.placeId, presence.gameId)
+                TeleportService:TeleportToPlaceInstance(presence.placeId, presence.gameId, LocalPlayer)
 
-                if not placeId or not gameId then
-                    error("Player is not in a game")
-                end
-
-                print("[ServerHop] " .. username .. " is in place " .. tostring(placeId) .. " | jobId: " .. tostring(gameId))
-
-                -- Teleport to that server
-                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
-
-                Rayfield:Notify({
-                    Title = "🌐 Server Hop",
-                    Content = "Joining " .. username .. "'s server...",
-                    Duration = 5,
-                    Image = 4483362458
-                })
+                Rayfield:Notify({ Title = "🌐 Server Hop", Content = "Joining " .. username .. "'s server...", Duration = 5, Image = 4483362458 })
                 sendWebhookLog("🌐 Server Hop", "Teleported to **" .. username .. "**'s server", 5763719)
             end)
 
-            if not success then
-                print("[ServerHop] Failed:", err)
-                Rayfield:Notify({
-                    Title = "🌐 Server Hop",
-                    Content = "Failed: " .. tostring(err),
-                    Duration = 5,
-                    Image = 4483362458
-                })
+            if not ok then
+                print("[ServerHop] ❌ Error:", err)
+                Rayfield:Notify({ Title = "🌐 Server Hop", Content = "Failed: " .. tostring(err), Duration = 5, Image = 4483362458 })
             end
         end)
     end
 
     -- ============================================
-    -- 🌀 SPIN PLAYER SYSTEM (RenderStepped — beats gym fight mode)
+    -- 🌀 SPIN PLAYER SYSTEM
     -- ============================================
     local spinConn = nil
     local spinAngle = 0
@@ -702,22 +869,6 @@ local function loadOreosHub()
     -- ============================================
     -- 🆕 GRAB HELPERS
     -- ============================================
-    local function findPlayerByName(name)
-        if not name or name == "" then return nil end
-        name = name:lower()
-        for _, p in Players:GetPlayers() do
-            if p ~= LocalPlayer then
-                if p.Name:lower() == name or p.DisplayName:lower() == name then return p end
-            end
-        end
-        for _, p in Players:GetPlayers() do
-            if p ~= LocalPlayer then
-                if p.Name:lower():find(name, 1, true) or p.DisplayName:lower():find(name, 1, true) then return p end
-            end
-        end
-        return nil
-    end
-
     local function teleportAndGrab(targetPlayer)
         if not targetPlayer or not targetPlayer.Character then return end
         local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -743,8 +894,7 @@ local function loadOreosHub()
 
         local startTime = tick()
         while tick() - startTime < 0.25 do
-            if targetHRP.Parent and myHRP.Parent then
-                myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
+            if targetHRP.Parent and myHRP.Parent then                myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
             end
             RunService.RenderStepped:Wait()
         end
@@ -872,7 +1022,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- KILL AURA (LEGEND edition - nearest target)
+    -- KILL AURA
     -- ============================================
     local kaConn = nil
 
@@ -1255,7 +1405,6 @@ local function loadOreosHub()
     })
 
     GodModeTab:CreateLabel("🥊 Toggle ON to disable Fight Mode in the gym")
-    GodModeTab:CreateLabel("🥊 Toggle OFF to restore normal Fight Mode")
 
     GodModeTab:CreateDivider()
     GodModeTab:CreateSection("Auto Escape 🚨")
@@ -1272,40 +1421,54 @@ local function loadOreosHub()
         end
     })
 
-    GodModeTab:CreateLabel("🚨 Teleports you to SkySafe when HP drops too low")
-    GodModeTab:CreateLabel("🔄 Auto returns to gym when HP recovers")
+    GodModeTab:CreateLabel("🚨 Teleports to SkySafe when HP drops too low")
 
     GodModeTab:CreateSlider({
-        Name = "Exit HP Threshold",
-        Range = {5, 90},
-        Increment = 5,
-        Suffix = "HP",
-        CurrentValue = 40,
-        Flag = "AutoExitHPThreshold",
+        Name = "Exit HP Threshold", Range = {5, 90}, Increment = 5, Suffix = "HP",
+        CurrentValue = 40, Flag = "AutoExitHPThreshold",
         Callback = function(v) Settings.AutoExitHPThreshold = v end
     })
 
     GodModeTab:CreateSlider({
-        Name = "Return HP Threshold",
-        Range = {20, 100},
-        Increment = 5,
-        Suffix = "HP",
-        CurrentValue = 60,
-        Flag = "AutoExitReturnHP",
+        Name = "Return HP Threshold", Range = {20, 100}, Increment = 5, Suffix = "HP",
+        CurrentValue = 60, Flag = "AutoExitReturnHP",
         Callback = function(v) Settings.AutoExitReturnHP = v end
     })
 
     GodModeTab:CreateSlider({
-        Name = "SkySafe Height",
-        Range = {100, 2000},
-        Increment = 50,
-        Suffix = "studs",
-        CurrentValue = 500,
-        Flag = "AutoExitSkyHeight",
+        Name = "SkySafe Height", Range = {100, 2000}, Increment = 50, Suffix = "studs",
+        CurrentValue = 500, Flag = "AutoExitSkyHeight",
         Callback = function(v) Settings.AutoExitSkyHeight = v end
     })
 
-    GodModeTab:CreateLabel("⚠️ Set Exit < Return so it doesn't loop")
+    GodModeTab:CreateDivider()
+    GodModeTab:CreateSection("Drag to Gym 🎯")
+
+    GodModeTab:CreateInput({
+        Name = "Target Username",
+        PlaceholderText = "Enter username to drag",
+        RemoveTextAfterFocusLost = false,
+        CurrentValue = "",
+        Callback = function(text) Settings.DragUsername = text end
+    })
+
+    GodModeTab:CreateButton({
+        Name = "🎯 Drag Player to Gym",
+        Callback = function()
+            PlayClickSound()
+            dragPlayerToGym()
+        end
+    })
+
+    GodModeTab:CreateLabel("🎯 Type a username, then click to teleport & drag them in")
+    GodModeTab:CreateLabel("⚠️ Target must NOT already be inside the arena")
+
+    GodModeTab:CreateSlider({
+        Name = "Drag Step Distance",
+        Range = {5, 30}, Increment = 1, Suffix = "studs",
+        CurrentValue = 15, Flag = "DragStepDistance",
+        Callback = function(v) Settings.DragStepDistance = v end
+    })
 
     -- AURA KILL TAB
     local AuraKillTab = Window:CreateTab("Aura Kill 🍪")
@@ -1326,18 +1489,12 @@ local function loadOreosHub()
     AuraKillTab:CreateInput({
         Name = "Target List", PlaceholderText = "space separated names (or 'all')", RemoveTextAfterFocusLost = false,
         CurrentValue = Get("KATargets", ""),
-        Callback = function(text)
-            Settings.KATargets = text
-            Set("KATargets", text)
-        end
+        Callback = function(text) Settings.KATargets = text; Set("KATargets", text) end
     })
     AuraKillTab:CreateInput({
         Name = "Safe List", PlaceholderText = "space separated names", RemoveTextAfterFocusLost = false,
         CurrentValue = Get("KASafe", ""),
-        Callback = function(text)
-            Settings.KASafe = text
-            Set("KASafe", text)
-        end
+        Callback = function(text) Settings.KASafe = text; Set("KASafe", text) end
     })
     AuraKillTab:CreateSection("Hitbox Expander")
     AuraKillTab:CreateToggle({
@@ -1544,24 +1701,15 @@ local function loadOreosHub()
     GlowBioTab:CreateSection("Color Mode")
     GlowBioTab:CreateButton({
         Name = "⚫⚪ Black & White",
-        Callback = function()
-            PlayClickSound()
-            Settings.BioColorMode = "black_white"
-        end
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "black_white" end
     })
     GlowBioTab:CreateButton({
         Name = "🌈 Rainbow",
-        Callback = function()
-            PlayClickSound()
-            Settings.BioColorMode = "rainbow"
-        end
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "rainbow" end
     })
     GlowBioTab:CreateButton({
         Name = "🚨 Police (Red & Blue)",
-        Callback = function()
-            PlayClickSound()
-            Settings.BioColorMode = "police"
-        end
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "police" end
     })
     GlowBioTab:CreateLabel("Current mode: Black & White by default")
     GlowBioTab:CreateSection("Glow Speed")
@@ -1633,10 +1781,7 @@ local function loadOreosHub()
     UtilityTab:CreateSlider({
         Name = "Walk Speed", Range = {16, 500}, Increment = 1, Suffix = "studs/s",
         CurrentValue = 50, Flag = "WalkSpeed",
-        Callback = function(v)
-            Settings.WalkSpeed = v
-            if Toggles.SpeedFlyEnabled then applySpeed() end
-        end
+        Callback = function(v) Settings.WalkSpeed = v; if Toggles.SpeedFlyEnabled then applySpeed() end end
     })
     UtilityTab:CreateSlider({
         Name = "Fly Speed", Range = {10, 500}, Increment = 10, Suffix = "studs/s",
@@ -1675,12 +1820,7 @@ local function loadOreosHub()
         Name = "🔄 Rejoin Server",
         Callback = function()
             PlayClickSound()
-            Rayfield:Notify({
-                Title = "🔄 Rejoin",
-                Content = "Rejoining server...",
-                Duration = 3,
-                Image = 4483362458
-            })
+            Rayfield:Notify({ Title = "🔄 Rejoin", Content = "Rejoining server...", Duration = 3, Image = 4483362458 })
             sendWebhookLog("🔄 Rejoin", "Player used Rejoin Server", 5763719)
             task.wait(0.5)
             pcall(function()
@@ -1691,9 +1831,6 @@ local function loadOreosHub()
 
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
 
-    -- ============================================
-    -- 🌐 TELEPORT TO PLAYER'S SERVER
-    -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("Join Player 🌐")
 
@@ -1715,11 +1852,7 @@ local function loadOreosHub()
 
     SettingsTab:CreateLabel("🌐 Type a username above, then click to join their server")
     SettingsTab:CreateLabel("⚠️ Player must be in the same game as you")
-    SettingsTab:CreateLabel("⚠️ Requires HTTP requests (most executors support this)")
 
-    -- ============================================
-    -- 🏋️ TELEPORT TO GYM
-    -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("Teleport 🏋️")
 
@@ -1730,30 +1863,17 @@ local function loadOreosHub()
             local ch = LocalPlayer.Character
             local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
             if not hrp then
-                Rayfield:Notify({
-                    Title = "🏋️ Gym Teleport",
-                    Content = "You need a character first",
-                    Duration = 3,
-                    Image = 4483362458
-                })
+                Rayfield:Notify({ Title = "🏋️ Gym Teleport", Content = "You need a character first", Duration = 3, Image = 4483362458 })
                 return
             end
             hrp.CFrame = CFrame.new(Settings.GymPosition)
-            Rayfield:Notify({
-                Title = "🏋️ Gym Teleport",
-                Content = "Teleported to the gym!",
-                Duration = 3,
-                Image = 4483362458
-            })
+            Rayfield:Notify({ Title = "🏋️ Gym Teleport", Content = "Teleported to the gym!", Duration = 3, Image = 4483362458 })
             sendWebhookLog("🏋️ Gym Teleport", "Player teleported to the gym", 5763719)
         end
     })
 
     SettingsTab:CreateLabel("🏋️ Instantly teleports you to the gym fighting area")
 
-    -- ============================================
-    -- 🌀 SPIN PLAYER
-    -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("Spin Player 🌀")
 
@@ -1771,20 +1891,13 @@ local function loadOreosHub()
 
     SettingsTab:CreateSlider({
         Name = "Spin Speed",
-        Range = {5, 120},
-        Increment = 5,
-        Suffix = "°/tick",
-        CurrentValue = 30,
-        Flag = "SpinSpeed",
+        Range = {5, 120}, Increment = 5, Suffix = "°/tick",
+        CurrentValue = 30, Flag = "SpinSpeed",
         Callback = function(v) Settings.SpinSpeed = v end
     })
 
     SettingsTab:CreateLabel("🌀 Spins your character in place at high speed")
-    SettingsTab:CreateLabel("⚠️ May look jittery on low-end devices")
 
-    -- ============================================
-    -- SKYSAFE ZONE
-    -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("SkySafe Zone ☁️")
 
@@ -1822,17 +1935,11 @@ local function loadOreosHub()
         local myChar = LocalPlayer.Character
         local hrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not hrp then
-            Rayfield:Notify({
-                Title = "☁️ SkySafe",
-                Content = "You need a character first",
-                Duration = 3,
-                Image = 4483362458
-            })
+            Rayfield:Notify({ Title = "☁️ SkySafe", Content = "You need a character first", Duration = 3, Image = 4483362458 })
             return
         end
 
         skyOriginalPos = hrp.CFrame
-
         if skyPlatformManual then skyPlatformManual:Destroy() end
         skyPlatformManual = createSkyPlatformManual(Vector3.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z))
         hrp.CFrame = CFrame.new(skyPlatformManual.Position + Vector3.new(0, 5, 0))
@@ -1849,24 +1956,13 @@ local function loadOreosHub()
             end
         end)
 
-        Rayfield:Notify({
-            Title = "☁️ SkySafe",
-            Content = "You're safe in the sky!",
-            Duration = 4,
-            Image = 4483362458
-        })
+        Rayfield:Notify({ Title = "☁️ SkySafe", Content = "You're safe in the sky!", Duration = 4, Image = 4483362458 })
         sendWebhookLog("☁️ SkySafe", "Enabled SkySafe Zone", 5763719)
     end
 
     local function disableSkySafe()
-        if skyHeartbeatConn then
-            skyHeartbeatConn:Disconnect()
-            skyHeartbeatConn = nil
-        end
-        if skyPlatformManual then
-            skyPlatformManual:Destroy()
-            skyPlatformManual = nil
-        end
+        if skyHeartbeatConn then skyHeartbeatConn:Disconnect(); skyHeartbeatConn = nil end
+        if skyPlatformManual then skyPlatformManual:Destroy(); skyPlatformManual = nil end
         local ch = LocalPlayer.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
         if hrp and skyOriginalPos then
@@ -1876,12 +1972,7 @@ local function loadOreosHub()
             end)
         end
         skyOriginalPos = nil
-        Rayfield:Notify({
-            Title = "☁️ SkySafe",
-            Content = "SkySafe disabled — returned to ground",
-            Duration = 3,
-            Image = 4483362458
-        })
+        Rayfield:Notify({ Title = "☁️ SkySafe", Content = "SkySafe disabled", Duration = 3, Image = 4483362458 })
         sendWebhookLog("☁️ SkySafe", "Disabled SkySafe Zone", 15548997)
     end
 
@@ -1897,17 +1988,11 @@ local function loadOreosHub()
     })
 
     SettingsTab:CreateLabel("⬆️ Teleports you high in the sky on an invisible platform")
-    SettingsTab:CreateLabel("🏃 You can walk & run freely on it")
-    SettingsTab:CreateLabel("🔒 Nobody else can see or reach the platform")
-    SettingsTab:CreateLabel("⚠️ Strict anti-cheat games may still detect you")
 
     SettingsTab:CreateSlider({
         Name = "Sky Height",
-        Range = {100, 2000},
-        Increment = 50,
-        Suffix = "studs",
-        CurrentValue = 500,
-        Flag = "SkyHeight",
+        Range = {100, 2000}, Increment = 50, Suffix = "studs",
+        CurrentValue = 500, Flag = "SkyHeight",
         Callback = function(v)
             SKY_HEIGHT = v
             if skySafeEnabled and skyPlatformManual then
@@ -1967,7 +2052,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 God Mode + Join Player Server"
+    updateTag.Text = "🆕 Drag by Username + God Mode"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
