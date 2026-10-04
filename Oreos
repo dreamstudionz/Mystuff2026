@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        ShowDistance = false,
         FPSBooster = false,
         AutoExitLowHP = false,
         DisableFightMode = false,
@@ -284,7 +285,6 @@ local function loadOreosHub()
             local switchInterval = 1 / Settings.BioSpeed
             local mode = Settings.BioColorMode
 
-            -- Helper to alternate between two colors
             local function alternate(colorA, colorB)
                 if now - lastToggleSwitch >= switchInterval then
                     toggleState = not toggleState
@@ -691,6 +691,146 @@ local function loadOreosHub()
     end
 
     -- ============================================
+    -- 📏 PLAYER DISTANCE DISPLAY
+    -- ============================================
+    local distanceConn = nil
+    local distanceLabels = {}
+
+    local function createDistanceLabel(player)
+        if distanceLabels[player] then return distanceLabels[player] end
+        local char = player.Character
+        if not char then return nil end
+        local head = char:FindFirstChild("Head")
+        if not head then return nil end
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "Oreo_DistanceLabel"
+        billboard.Size = UDim2.new(0, 100, 0, 30)
+        billboard.StudsOffset = Vector3.new(0, 3, 0)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.MaxDistance = 5000
+        billboard.Parent = head
+
+        local bg = Instance.new("Frame")
+        bg.Name = "BG"
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        bg.BackgroundTransparency = 0.5
+        bg.BorderSizePixel = 0
+        bg.Parent = billboard
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
+
+        local text = Instance.new("TextLabel")
+        text.Name = "DistanceText"
+        text.Size = UDim2.new(1, 0, 1, 0)
+        text.BackgroundTransparency = 1
+        text.Text = "0 studs"
+        text.TextColor3 = Color3.fromRGB(255, 255, 255)
+        text.Font = Enum.Font.GothamBold
+        text.TextSize = 14
+        text.TextStrokeTransparency = 0
+        text.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        text.Parent = bg
+
+        distanceLabels[player] = billboard
+        return billboard
+    end
+
+    local function removeDistanceLabel(player)
+        local label = distanceLabels[player]
+        if label then
+            pcall(function() label:Destroy() end)
+            distanceLabels[player] = nil
+        end
+    end
+
+    local function updateAllDistances()
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+
+        for _, p in Players:GetPlayers() do
+            if p == LocalPlayer then continue end
+            local theirChar = p.Character
+            if not theirChar then
+                removeDistanceLabel(p)
+                continue
+            end
+            local theirHRP = theirChar:FindFirstChild("HumanoidRootPart")
+            local theirHead = theirChar:FindFirstChild("Head")
+            local theirHu = theirChar:FindFirstChildOfClass("Humanoid")
+
+            if not theirHRP or not theirHead or (theirHu and theirHu.Health <= 0) then
+                removeDistanceLabel(p)
+                continue
+            end
+
+            local label = distanceLabels[p] or createDistanceLabel(p)
+            if not label then continue end
+
+            if label.Parent ~= theirHead then
+                removeDistanceLabel(p)
+                label = createDistanceLabel(p)
+                if not label then continue end
+            end
+
+            local dist = (theirHRP.Position - myHRP.Position).Magnitude
+            local textLabel = label:FindFirstChild("BG") and label.BG:FindFirstChild("DistanceText")
+            if textLabel then
+                textLabel.Text = string.format("%d studs", math.floor(dist))
+
+                if dist < 10 then
+                    textLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                elseif dist < 30 then
+                    textLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+                elseif dist < 100 then
+                    textLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                else
+                    textLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+                end
+            end
+        end
+    end
+
+    local function startDistanceDisplay()
+        if distanceConn then distanceConn:Disconnect(); distanceConn = nil end
+
+        for _, p in Players:GetPlayers() do
+            if p ~= LocalPlayer then
+                task.spawn(function()
+                    pcall(function() createDistanceLabel(p) end)
+                end)
+            end
+        end
+
+        distanceConn = RunService.Heartbeat:Connect(function()
+            if not Toggles.ShowDistance then return end
+            updateAllDistances()
+        end)
+    end
+
+    local function stopDistanceDisplay()
+        if distanceConn then distanceConn:Disconnect(); distanceConn = nil end
+        for p, _ in pairs(distanceLabels) do
+            removeDistanceLabel(p)
+        end
+        distanceLabels = {}
+    end
+
+    Players.PlayerAdded:Connect(function(p)
+        if Toggles.ShowDistance then
+            task.spawn(function()
+                pcall(function() createDistanceLabel(p) end)
+            end)
+        end
+    end)
+
+    Players.PlayerRemoving:Connect(function(p)
+        removeDistanceLabel(p)
+    end)
+
+    -- ============================================
     -- 🌐 TELEPORT TO PLAYER'S SERVER
     -- ============================================
     local TeleportService = game:GetService("TeleportService")
@@ -846,7 +986,8 @@ local function loadOreosHub()
             for _, p in Players:GetPlayers() do
                 if p ~= LocalPlayer and p.Character then
                     local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
-                    if theirHRP and (theirHRP.Position - myHRP.Position).Magnitude <= Settings.AutoTargetRange then                        if GrabRF then
+                    if theirHRP and (theirHRP.Position - myHRP.Position).Magnitude <= Settings.AutoTargetRange then
+                        if GrabRF then
                             pcall(function()
                                 if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(p)
                                 else GrabRF:FireServer(p) end
@@ -1833,6 +1974,25 @@ local function loadOreosHub()
     SettingsTab:CreateLabel("🔄 Rejoin to fully restore effects")
 
     SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("Player Info 📏")
+
+    SettingsTab:CreateToggle({
+        Name = "📏 Show Player Distances",
+        CurrentValue = false,
+        Flag = "ShowDistanceToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.ShowDistance = v
+            if v then startDistanceDisplay() else stopDistanceDisplay() end
+            sendWebhookLog("📏 Distance Display", (v and "**Enabled** Distance Display" or "**Disabled** Distance Display"), v and 5763719 or 15548997)
+        end
+    })
+
+    SettingsTab:CreateLabel("📏 Shows stud distance above every player's head")
+    SettingsTab:CreateLabel("🔴 Red < 10 | 🟡 Yellow < 30 | 🟢 Green < 100 | ⚪ Gray far")
+    SettingsTab:CreateLabel("⚠️ Visual only — nobody else sees it")
+
+    SettingsTab:CreateDivider()
     SettingsTab:CreateSection("Spin Player 🌀")
 
     SettingsTab:CreateToggle({
@@ -2010,7 +2170,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 12 Glow Colors + FPS Booster"
+    updateTag.Text = "🆕 Distance Display + 12 Colors"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
