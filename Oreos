@@ -172,6 +172,8 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        AutoExitLowHP = false,
+        DisableFightMode = false,
         SpinPlayer = false,
         KillAura = false, SpamGrab = false, Hitbox = false,
         AntiRag = true, AntiFling = false, AntiAFK = true, AntiVoid = false,
@@ -201,6 +203,10 @@ local function loadOreosHub()
         AutoTargetRange = 50,
         SpinSpeed = 30,
         GymPosition = Vector3.new(-107.13987731933594, 4.336757183074951, 580.064208984375),
+        AutoExitHPThreshold = 40,
+        AutoExitReturnHP = 60,
+        AutoExitSkyHeight = 500,
+        TargetUsername = "",
     }
 
     -- ============================================
@@ -338,20 +344,14 @@ local function loadOreosHub()
         grabConfirmCount = 0
     end
 
-    -- Direction-aware: only fires when ANOTHER player is grabbing US.
-    -- The game puts a GRAB_weld inside the GRABBER's character. So:
-    --   - If OUR character has a GRAB_weld → WE are grabbing → return false
-    --   - Only if OUR character is clean AND their char has a GRAB_weld → we're being grabbed
     local function isGrabbedByOtherPlayer()
         local ch = LocalPlayer.Character
         if not ch then return false, nil end
 
-        -- ABSOLUTE RULE: any GRAB_weld inside our own character = we are the grabber
         if ch:FindFirstChild("GRAB_weld", true) then
             return false, nil
         end
 
-        -- Otherwise check if anyone else has a GRAB_weld pointing at us
         for _, p in Players:GetPlayers() do
             if p ~= LocalPlayer and p.Character then
                 local theirHu = p.Character:FindFirstChildOfClass("Humanoid")
@@ -402,6 +402,259 @@ local function loadOreosHub()
     local function stopEscapeGrab()
         if escapeGrabConn then escapeGrabConn:Disconnect(); escapeGrabConn = nil end
         grabConfirmCount = 0
+    end
+
+    -- ============================================
+    -- 🥊 DISABLE FIGHT MODE SYSTEM
+    -- ============================================
+    local fightDisableConn = nil
+
+    local function startDisableFightMode()
+        if fightDisableConn then fightDisableConn:Disconnect(); fightDisableConn = nil end
+
+        fightDisableConn = RunService.Heartbeat:Connect(function()
+            if not Toggles.DisableFightMode then return end
+            pcall(function()
+                if LocalPlayer:GetAttribute("Fighting") == true then
+                    LocalPlayer:SetAttribute("Fighting", false)
+                end
+                if LocalPlayer:GetAttribute("Blocking") == true then
+                    LocalPlayer:SetAttribute("Blocking", false)
+                end
+            end)
+        end)
+    end
+
+    local function stopDisableFightMode()
+        if fightDisableConn then fightDisableConn:Disconnect(); fightDisableConn = nil end
+    end
+
+    -- ============================================
+    -- 🚨 AUTO EXIT ON LOW HP (SkySafe + Return)
+    -- ============================================
+    local autoExitConn = nil
+    local autoExitCooldown = 0
+    local skyPlatform = nil
+    local isInSkySafe = false
+    local savedGymPosition = nil
+
+    local function createSkyPlatform(position)
+        if skyPlatform then skyPlatform:Destroy() end
+        local plat = Instance.new("Part")
+        plat.Name = "Oreo_SkySafe_AutoExit"
+        plat.Size = Vector3.new(200, 1, 200)
+        plat.Anchored = true
+        plat.CanCollide = true
+        plat.Transparency = 1
+        plat.CanQuery = false
+        plat.CanTouch = false
+        plat.Material = Enum.Material.SmoothPlastic
+        plat.CFrame = CFrame.new(position)
+        plat.Parent = workspace
+
+        local outline = Instance.new("SelectionBox")
+        outline.Name = "SkyOutline"
+        outline.Adornee = plat
+        outline.LineThickness = 0.1
+        outline.Color3 = Color3.fromRGB(120, 200, 255)
+        outline.Transparency = 0.7
+        outline.Parent = plat
+
+        skyPlatform = plat
+    end
+
+    local function destroySkyPlatform()
+        if skyPlatform then
+            skyPlatform:Destroy()
+            skyPlatform = nil
+        end
+    end
+
+    local function autoExitSound()
+        local s = Instance.new("Sound")
+        s.SoundId = "rbxassetid://9120386436"
+        s.Volume = 5
+        s.Parent = game:GetService("SoundService")
+        s:Play()
+        game:GetService("Debris"):AddItem(s, 2)
+    end
+
+    local function teleportToSkySafe(reason)
+        local ch = LocalPlayer.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if tick() - autoExitCooldown < 3 then return end
+
+        autoExitCooldown = tick()
+        print("[AutoExit] >>> TELEPORTING TO SKYSAFE! Reason:", reason)
+
+        savedGymPosition = hrp.Position
+        autoExitSound()
+
+        local safePos = Vector3.new(
+            hrp.Position.X,
+            hrp.Position.Y + Settings.AutoExitSkyHeight,
+            hrp.Position.Z
+        )
+        createSkyPlatform(safePos)
+        isInSkySafe = true
+
+        pcall(function()
+            hrp.CFrame = CFrame.new(safePos + Vector3.new(0, 5, 0))
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end)
+    end
+
+    local function returnToGym(reason)
+        local ch = LocalPlayer.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if tick() - autoExitCooldown < 3 then return end
+
+        autoExitCooldown = tick()
+        print("[AutoExit] >>> RETURNING TO GYM! Reason:", reason)
+
+        autoExitSound()
+        destroySkyPlatform()
+        isInSkySafe = false
+
+        local target = savedGymPosition or Settings.GymPosition
+        pcall(function()
+            hrp.CFrame = CFrame.new(target + Vector3.new(0, 3, 0))
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end)
+        savedGymPosition = nil
+    end
+
+    local function startAutoExitLowHP()
+        if autoExitConn then autoExitConn:Disconnect(); autoExitConn = nil end
+
+        autoExitConn = RunService.Heartbeat:Connect(function()
+            if not Toggles.AutoExitLowHP then return end
+
+            local ch = LocalPlayer.Character
+            local hu = ch and ch:FindFirstChildOfClass("Humanoid")
+            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+            if not hu or not hrp then return end
+
+            if isInSkySafe and skyPlatform and hrp.Position.Y < skyPlatform.Position.Y - 10 then
+                pcall(function()
+                    hrp.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                end)
+            end
+
+            if not isInSkySafe and hu.Health > 0 and hu.Health < Settings.AutoExitHPThreshold then
+                teleportToSkySafe("HP=" .. math.floor(hu.Health))
+            end
+
+            if isInSkySafe and hu.Health >= Settings.AutoExitReturnHP then
+                returnToGym("HP=" .. math.floor(hu.Health))
+            end
+        end)
+    end
+
+    local function stopAutoExitLowHP()
+        if autoExitConn then autoExitConn:Disconnect(); autoExitConn = nil end
+        destroySkyPlatform()
+        isInSkySafe = false
+        savedGymPosition = nil
+    end
+
+    -- ============================================
+    -- 🌐 TELEPORT TO PLAYER'S SERVER
+    -- ============================================
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService2 = game:GetService("HttpService")
+
+    local function teleportToPlayerServer(username)
+        if not username or username == "" then
+            Rayfield:Notify({
+                Title = "🌐 Server Hop",
+                Content = "Please enter a username first",
+                Duration = 3,
+                Image = 4483362458
+            })
+            return
+        end
+
+        Rayfield:Notify({
+            Title = "🌐 Server Hop",
+            Content = "Looking up " .. username .. "...",
+            Duration = 3,
+            Image = 4483362458
+        })
+
+        task.spawn(function()
+            local success, err = pcall(function()
+                -- Get user ID from username
+                local userId = Players:GetUserIdFromNameAsync(username)
+
+                -- API endpoints to try (in order)
+                local endpoints = {
+                    -- Main API with presence
+                    "https://presence.roblox.com/v1/presence/users",
+                    -- Alternative
+                    "https://users.roblox.com/v1/users/" .. tostring(userId),
+                }
+
+                -- First, try presence API to get the game + job id
+                local presenceUrl = "https://presence.roblox.com/v1/presence/users"
+                local body = HttpService2:JSONEncode({ userIds = { userId } })
+
+                local response = syn and syn.request or http_request or request
+                if not response then
+                    error("No HTTP function available")
+                end
+
+                local res = response({
+                    Url = presenceUrl,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "application/json"
+                    },
+                    Body = body
+                })
+
+                local data = HttpService2:JSONDecode(res.Body)
+                local presence = data.userPresences and data.userPresences[1]
+
+                if not presence then
+                    error("Could not get presence")
+                end
+
+                local placeId = presence.placeId
+                local gameId = presence.gameId
+                local rootPlaceId = presence.rootPlaceId
+
+                if not placeId or not gameId then
+                    error("Player is not in a game")
+                end
+
+                print("[ServerHop] " .. username .. " is in place " .. tostring(placeId) .. " | jobId: " .. tostring(gameId))
+
+                -- Teleport to that server
+                TeleportService:TeleportToPlaceInstance(placeId, gameId, LocalPlayer)
+
+                Rayfield:Notify({
+                    Title = "🌐 Server Hop",
+                    Content = "Joining " .. username .. "'s server...",
+                    Duration = 5,
+                    Image = 4483362458
+                })
+                sendWebhookLog("🌐 Server Hop", "Teleported to **" .. username .. "**'s server", 5763719)
+            end)
+
+            if not success then
+                print("[ServerHop] Failed:", err)
+                Rayfield:Notify({
+                    Title = "🌐 Server Hop",
+                    Content = "Failed: " .. tostring(err),
+                    Duration = 5,
+                    Image = 4483362458
+                })
+            end
+        end)
     end
 
     -- ============================================
@@ -983,6 +1236,77 @@ local function loadOreosHub()
     HomeTab:CreateLabel("  🍪 🍪 🍪 🍪")
     HomeTab:CreateLabel("🍪 🍪 🍪 🍪 🍪")
 
+    -- ============================================
+    -- GOD MODE TAB
+    -- ============================================
+    local GodModeTab = Window:CreateTab("God Mode 🥊")
+    GodModeTab:CreateSection("God Mode 🥊")
+
+    GodModeTab:CreateToggle({
+        Name = "🥊 Fight Mode in Gym (OFF = disabled)",
+        CurrentValue = false,
+        Flag = "DisableFightModeToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.DisableFightMode = v
+            if v then startDisableFightMode() else stopDisableFightMode() end
+            sendWebhookLog("🥊 God Mode", (v and "**Enabled** Fight Mode Disabled" or "**Disabled** Fight Mode Disabled"), v and 5763719 or 15548997)
+        end
+    })
+
+    GodModeTab:CreateLabel("🥊 Toggle ON to disable Fight Mode in the gym")
+    GodModeTab:CreateLabel("🥊 Toggle OFF to restore normal Fight Mode")
+
+    GodModeTab:CreateDivider()
+    GodModeTab:CreateSection("Auto Escape 🚨")
+
+    GodModeTab:CreateToggle({
+        Name = "🚨 Auto Exit Gym (Low HP → SkySafe)",
+        CurrentValue = false,
+        Flag = "AutoExitLowHPToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.AutoExitLowHP = v
+            if v then startAutoExitLowHP() else stopAutoExitLowHP() end
+            sendWebhookLog("🚨 Auto Exit", (v and "**Enabled** Auto Exit on low HP" or "**Disabled** Auto Exit on low HP"), v and 5763719 or 15548997)
+        end
+    })
+
+    GodModeTab:CreateLabel("🚨 Teleports you to SkySafe when HP drops too low")
+    GodModeTab:CreateLabel("🔄 Auto returns to gym when HP recovers")
+
+    GodModeTab:CreateSlider({
+        Name = "Exit HP Threshold",
+        Range = {5, 90},
+        Increment = 5,
+        Suffix = "HP",
+        CurrentValue = 40,
+        Flag = "AutoExitHPThreshold",
+        Callback = function(v) Settings.AutoExitHPThreshold = v end
+    })
+
+    GodModeTab:CreateSlider({
+        Name = "Return HP Threshold",
+        Range = {20, 100},
+        Increment = 5,
+        Suffix = "HP",
+        CurrentValue = 60,
+        Flag = "AutoExitReturnHP",
+        Callback = function(v) Settings.AutoExitReturnHP = v end
+    })
+
+    GodModeTab:CreateSlider({
+        Name = "SkySafe Height",
+        Range = {100, 2000},
+        Increment = 50,
+        Suffix = "studs",
+        CurrentValue = 500,
+        Flag = "AutoExitSkyHeight",
+        Callback = function(v) Settings.AutoExitSkyHeight = v end
+    })
+
+    GodModeTab:CreateLabel("⚠️ Set Exit < Return so it doesn't loop")
+
     -- AURA KILL TAB
     local AuraKillTab = Window:CreateTab("Aura Kill 🍪")
     AuraKillTab:CreateSection("Kill Aura")
@@ -1368,6 +1692,32 @@ local function loadOreosHub()
     SettingsTab:CreateLabel("↩️ Instantly rejoins the current server")
 
     -- ============================================
+    -- 🌐 TELEPORT TO PLAYER'S SERVER
+    -- ============================================
+    SettingsTab:CreateDivider()
+    SettingsTab:CreateSection("Join Player 🌐")
+
+    SettingsTab:CreateInput({
+        Name = "Player Username",
+        PlaceholderText = "Enter username",
+        RemoveTextAfterFocusLost = false,
+        CurrentValue = "",
+        Callback = function(text) Settings.TargetUsername = text end
+    })
+
+    SettingsTab:CreateButton({
+        Name = "🌐 Teleport to Player's Server",
+        Callback = function()
+            PlayClickSound()
+            teleportToPlayerServer(Settings.TargetUsername)
+        end
+    })
+
+    SettingsTab:CreateLabel("🌐 Type a username above, then click to join their server")
+    SettingsTab:CreateLabel("⚠️ Player must be in the same game as you")
+    SettingsTab:CreateLabel("⚠️ Requires HTTP requests (most executors support this)")
+
+    -- ============================================
     -- 🏋️ TELEPORT TO GYM
     -- ============================================
     SettingsTab:CreateDivider()
@@ -1439,12 +1789,12 @@ local function loadOreosHub()
     SettingsTab:CreateSection("SkySafe Zone ☁️")
 
     local skySafeEnabled = false
-    local skyPlatform = nil
+    local skyPlatformManual = nil
     local skyOriginalPos = nil
     local skyHeartbeatConn = nil
     local SKY_HEIGHT = 500
 
-    local function createSkyPlatform()
+    local function createSkyPlatformManual(position)
         local plat = Instance.new("Part")
         plat.Name = "Oreo_SkySafe"
         plat.Size = Vector3.new(200, 1, 200)
@@ -1454,6 +1804,7 @@ local function loadOreosHub()
         plat.CanQuery = false
         plat.CanTouch = false
         plat.Material = Enum.Material.SmoothPlastic
+        plat.CFrame = CFrame.new(position)
         plat.Parent = workspace
 
         local outline = Instance.new("SelectionBox")
@@ -1482,19 +1833,18 @@ local function loadOreosHub()
 
         skyOriginalPos = hrp.CFrame
 
-        if skyPlatform then skyPlatform:Destroy() end
-        skyPlatform = createSkyPlatform()
-        skyPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z)
-        hrp.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+        if skyPlatformManual then skyPlatformManual:Destroy() end
+        skyPlatformManual = createSkyPlatformManual(Vector3.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z))
+        hrp.CFrame = CFrame.new(skyPlatformManual.Position + Vector3.new(0, 5, 0))
 
         if skyHeartbeatConn then skyHeartbeatConn:Disconnect() end
         skyHeartbeatConn = RunService.Heartbeat:Connect(function()
             if not skySafeEnabled then return end
             local ch = LocalPlayer.Character
             local r = ch and ch:FindFirstChild("HumanoidRootPart")
-            if not r or not skyPlatform then return end
-            if r.Position.Y < skyPlatform.Position.Y - 10 then
-                r.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+            if not r or not skyPlatformManual then return end
+            if r.Position.Y < skyPlatformManual.Position.Y - 10 then
+                r.CFrame = CFrame.new(skyPlatformManual.Position + Vector3.new(0, 5, 0))
                 r.AssemblyLinearVelocity = Vector3.zero
             end
         end)
@@ -1513,9 +1863,9 @@ local function loadOreosHub()
             skyHeartbeatConn:Disconnect()
             skyHeartbeatConn = nil
         end
-        if skyPlatform then
-            skyPlatform:Destroy()
-            skyPlatform = nil
+        if skyPlatformManual then
+            skyPlatformManual:Destroy()
+            skyPlatformManual = nil
         end
         local ch = LocalPlayer.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
@@ -1560,11 +1910,11 @@ local function loadOreosHub()
         Flag = "SkyHeight",
         Callback = function(v)
             SKY_HEIGHT = v
-            if skySafeEnabled and skyPlatform then
+            if skySafeEnabled and skyPlatformManual then
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    skyPlatform.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z)
-                    hrp.CFrame = CFrame.new(skyPlatform.Position + Vector3.new(0, 5, 0))
+                    skyPlatformManual.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + SKY_HEIGHT, hrp.Position.Z)
+                    hrp.CFrame = CFrame.new(skyPlatformManual.Position + Vector3.new(0, 5, 0))
                 end
             end
         end
@@ -1617,7 +1967,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Escape Grab fixed + Spin bot"
+    updateTag.Text = "🆕 God Mode + Join Player Server"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
