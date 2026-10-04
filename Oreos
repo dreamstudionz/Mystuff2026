@@ -691,7 +691,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 📏 PLAYER DISTANCE DISPLAY (with username)
+    -- 📏 PLAYER DISTANCE DISPLAY (username + distance)
     -- ============================================
     local distanceConn = nil
     local distanceLabels = {}
@@ -721,13 +721,13 @@ local function loadOreosHub()
         bg.Parent = billboard
         Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
 
-        -- Username (top line)
+        -- Username (top line) — shows actual username, not display name
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "NameText"
         nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
         nameLabel.Position = UDim2.new(0, 0, 0, 0)
         nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = player.DisplayName ~= "" and player.DisplayName or player.Name
+        nameLabel.Text = player.Name
         nameLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.TextSize = 14
@@ -797,8 +797,9 @@ local function loadOreosHub()
                 local nameLabel = bg:FindFirstChild("NameText")
                 local textLabel = bg:FindFirstChild("DistanceText")
 
+                -- Show actual username (not display name)
                 if nameLabel then
-                    nameLabel.Text = p.DisplayName ~= "" and p.DisplayName or p.Name
+                    nameLabel.Text = p.Name
                 end
 
                 if textLabel then
@@ -2014,7 +2015,7 @@ local function loadOreosHub()
     })
 
     SettingsTab:CreateLabel("📏 Shows username + stud distance above every player's head")
-    SettingsTab:CreateLabel("🟡 Name in gold | Distance color: 🔴<10 🟡<30 🟢<100 ⚪far")
+    SettingsTab:CreateLabel("🟡 Username in gold | Distance color: 🔴<10 🟡<30 🟢<100 ⚪far")
     SettingsTab:CreateLabel("⚠️ Visual only — nobody else sees it")
 
     SettingsTab:CreateDivider()
@@ -2195,7 +2196,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Name + Distance Labels"
+    updateTag.Text = "🆕 Username + Distance Labels"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
