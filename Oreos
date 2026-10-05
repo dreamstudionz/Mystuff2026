@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        GrabFromHead = false,
         VerticalOrbit = false,
         PulseOrbit = false,
         ShowDistance = false,
@@ -190,6 +191,7 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
+        HeadGrabHeight = 3,
         VerticalOrbitTopOffset = 3,
         VerticalOrbitBottomOffset = -3,
         VerticalOrbitSpeed = 1,
@@ -209,6 +211,7 @@ local function loadOreosHub()
         LastRPColor = Color3.fromRGB(255, 255, 255),
         GrabTarget1 = "",
         GrabTarget2 = "",
+        GrabDistance = 3,
         AutoTargetRange = 50,
         SpinSpeed = 30,
         GymPosition = Vector3.new(-107.13987731933594, 4.336757183074951, 580.064208984375),
@@ -1016,10 +1019,10 @@ local function loadOreosHub()
         local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
         if not targetHRP or not myHRP then return end
 
-        -- Teleport directly BEHIND the target, facing same direction
-        local dist = 1
-        local backCFrame = targetHRP.CFrame * CFrame.new(0, 0, dist)
-        myHRP.CFrame = CFrame.new(backCFrame.Position, backCFrame.Position + targetHRP.CFrame.LookVector)
+        -- Teleport to their front at user-set distance
+        local dist = Settings.GrabDistance or 3
+        local newCFrame = targetHRP.CFrame * CFrame.new(0, 0, dist)
+        myHRP.CFrame = CFrame.new(newCFrame.Position, targetHRP.Position)
         if myHumanoid then myHumanoid.AutoRotate = false end
 
         if GrabRF then
@@ -1035,9 +1038,52 @@ local function loadOreosHub()
         local startTime = tick()
         while tick() - startTime < 0.25 do
             if targetHRP.Parent and myHRP.Parent then
-                -- Keep us behind them during the grab lock
-                local behindCFrame = targetHRP.CFrame * CFrame.new(0, 0, dist)
-                myHRP.CFrame = CFrame.new(behindCFrame.Position, behindCFrame.Position + targetHRP.CFrame.LookVector)
+                myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
+            end
+            RunService.RenderStepped:Wait()
+        end
+        if myHumanoid then myHumanoid.AutoRotate = true end
+    end
+
+    -- ============================================
+    -- 🎯 GRAB FROM HEAD (Vertical)
+    -- ============================================
+    local function grabFromHead(targetPlayer)
+        if not targetPlayer or not targetPlayer.Character then return end
+        local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local targetHead = targetPlayer.Character:FindFirstChild("Head")
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if not targetHRP or not myHRP then return end
+
+        -- Pick the head if available, otherwise use HRP
+        local anchor = targetHead or targetHRP
+        local height = Settings.HeadGrabHeight or 3
+
+        -- Teleport directly ABOVE their head
+        local abovePos = anchor.Position + Vector3.new(0, height, 0)
+        myHRP.CFrame = CFrame.new(abovePos, abovePos + targetHRP.CFrame.LookVector)
+        if myHumanoid then myHumanoid.AutoRotate = false end
+
+        if GrabRF then
+            for _ = 1, 8 do
+                pcall(function()
+                    if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(targetPlayer)
+                    else GrabRF:FireServer(targetPlayer) end
+                end)
+            end
+            lastIGrabbedTime = tick()
+        end
+
+        -- Hold position above their head briefly
+        local startTime = tick()
+        while tick() - startTime < 0.25 do
+            if targetHRP.Parent and myHRP.Parent then
+                local a = targetHead or targetHRP
+                if a then
+                    myHRP.CFrame = CFrame.new(a.Position + Vector3.new(0, height, 0))
+                end
             end
             RunService.RenderStepped:Wait()
         end
@@ -1695,10 +1741,15 @@ local function loadOreosHub()
         Name = "Select Player (2)", PlaceholderText = "Enter name", RemoveTextAfterFocusLost = false, CurrentValue = "",
         Callback = function(text) Settings.GrabTarget2 = text end
     })
+    GrabTab:CreateSlider({
+        Name = "Teleport Distance", Range = {1, 10}, Increment = 1, Suffix = "studs",
+        CurrentValue = 3, Flag = "GrabDistance",
+        Callback = function(v) Settings.GrabDistance = v end
+    })
 
     GrabTab:CreateSection("Teleport + Grab")
     GrabTab:CreateButton({
-        Name = "🚀 Teleport & Grab Player 1 (from back)",
+        Name = "🚀 Teleport & Grab Player 1",
         Callback = function()
             PlayClickSound()
             local target = findPlayerByName(Settings.GrabTarget1)
@@ -1706,7 +1757,7 @@ local function loadOreosHub()
         end
     })
     GrabTab:CreateButton({
-        Name = "🚀 Teleport & Grab Player 2 (from back)",
+        Name = "🚀 Teleport & Grab Player 2",
         Callback = function()
             PlayClickSound()
             local target = findPlayerByName(Settings.GrabTarget2)
@@ -1714,7 +1765,7 @@ local function loadOreosHub()
         end
     })
     GrabTab:CreateButton({
-        Name = "🚀 Teleport & Grab Both (from back)",
+        Name = "🚀 Teleport & Grab Both",
         Callback = function()
             PlayClickSound()
             local t1 = findPlayerByName(Settings.GrabTarget1)
@@ -1724,6 +1775,46 @@ local function loadOreosHub()
             if t2 then teleportAndGrab(t2) end
         end
     })
+
+    GrabTab:CreateDivider()
+    GrabTab:CreateSection("Grab from Head 🎯")
+
+    GrabTab:CreateButton({
+        Name = "🎯 Grab from Head (Player 1)",
+        Callback = function()
+            PlayClickSound()
+            local target = findPlayerByName(Settings.GrabTarget1)
+            if target then grabFromHead(target) end
+        end
+    })
+    GrabTab:CreateButton({
+        Name = "🎯 Grab from Head (Player 2)",
+        Callback = function()
+            PlayClickSound()
+            local target = findPlayerByName(Settings.GrabTarget2)
+            if target then grabFromHead(target) end
+        end
+    })
+    GrabTab:CreateButton({
+        Name = "🎯 Grab from Head (Both)",
+        Callback = function()
+            PlayClickSound()
+            local t1 = findPlayerByName(Settings.GrabTarget1)
+            local t2 = findPlayerByName(Settings.GrabTarget2)
+            if t1 then grabFromHead(t1) end
+            task.wait(0.15)
+            if t2 then grabFromHead(t2) end
+        end
+    })
+
+    GrabTab:CreateSlider({
+        Name = "Head Grab Height", Range = {1, 15}, Increment = 1, Suffix = "studs",
+        CurrentValue = 3, Flag = "HeadGrabHeight",
+        Callback = function(v) Settings.HeadGrabHeight = v end
+    })
+
+    GrabTab:CreateLabel("🎯 Teleports above their head and grabs from up top")
+    GrabTab:CreateLabel("⚠️ Height slider = how far above the head")
 
     GrabTab:CreateSection("Loop Teleport + Grab")
     GrabTab:CreateToggle({
@@ -2396,7 +2487,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Back Grab + 30 Colors"
+    updateTag.Text = "🆕 Head Grab + 30 Colors"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
