@@ -189,9 +189,9 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
-        PulseOrbitMinRadius = 5,
-        PulseOrbitMaxRadius = 25,
-        PulseOrbitSpeed = 1,
+        PulseOrbitMinRadius = 3,
+        PulseOrbitMaxRadius = 60,
+        PulseOrbitSpeed = 0.5,
         KARange = 50, HitboxSize = 10,
         KATargets = Get("KATargets", ""),
         KASafe    = Get("KASafe", ""),
@@ -325,6 +325,22 @@ local function loadOreosHub()
                 alternate(Color3.fromRGB(255, 60, 0), Color3.fromRGB(255, 200, 0))
             elseif mode == "ice" then
                 alternate(Color3.fromRGB(150, 220, 255), Color3.fromRGB(255, 255, 255))
+            elseif mode == "galaxy" then
+                alternate(Color3.fromRGB(75, 0, 130), Color3.fromRGB(255, 20, 147))
+            elseif mode == "matrix" then
+                alternate(Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 0))
+            elseif mode == "blood" then
+                alternate(Color3.fromRGB(139, 0, 0), Color3.fromRGB(255, 0, 0))
+            elseif mode == "toxic" then
+                alternate(Color3.fromRGB(57, 255, 20), Color3.fromRGB(150, 255, 0))
+            elseif mode == "sunset" then
+                alternate(Color3.fromRGB(255, 94, 77), Color3.fromRGB(255, 154, 0))
+            elseif mode == "ocean" then
+                alternate(Color3.fromRGB(0, 105, 148), Color3.fromRGB(72, 209, 204))
+            elseif mode == "royal" then
+                alternate(Color3.fromRGB(75, 0, 130), Color3.fromRGB(255, 215, 0))
+            elseif mode == "cyberpunk" then
+                alternate(Color3.fromRGB(255, 0, 255), Color3.fromRGB(0, 255, 255))
             elseif mode == "custom" then
                 applyColors(Settings.BioCustomColor)
             end
@@ -1112,7 +1128,7 @@ local function loadOreosHub()
                 return
             end
             if Toggles.PulseOrbit then
-                orbitAngle = orbitAngle + (0.05 * Settings.BangSpeed)
+                orbitAngle = orbitAngle + (0.03 * Settings.BangSpeed)
 
                 local minR = Settings.PulseOrbitMinRadius
                 local maxR = Settings.PulseOrbitMaxRadius
@@ -1735,20 +1751,20 @@ local function loadOreosHub()
     })
     BangTab:CreateSlider({
         Name = "Pulse Min Radius", Range = {1, 50}, Increment = 1, Suffix = "studs",
-        CurrentValue = 5, Flag = "PulseOrbitMinRadius",
+        CurrentValue = 3, Flag = "PulseOrbitMinRadius",
         Callback = function(v) Settings.PulseOrbitMinRadius = v end
     })
     BangTab:CreateSlider({
-        Name = "Pulse Max Radius", Range = {5, 100}, Increment = 1, Suffix = "studs",
-        CurrentValue = 25, Flag = "PulseOrbitMaxRadius",
+        Name = "Pulse Max Radius", Range = {10, 200}, Increment = 5, Suffix = "studs",
+        CurrentValue = 60, Flag = "PulseOrbitMaxRadius",
         Callback = function(v) Settings.PulseOrbitMaxRadius = v end
     })
     BangTab:CreateSlider({
-        Name = "Pulse Speed", Range = {1, 10}, Increment = 1, Suffix = "x",
-        CurrentValue = 1, Flag = "PulseOrbitSpeed",
-        Callback = function(v) Settings.PulseOrbitSpeed = v end
+        Name = "Pulse Speed", Range = {1, 20}, Increment = 1, Suffix = "x0.1/s",
+        CurrentValue = 5, Flag = "PulseOrbitSpeed",
+        Callback = function(v) Settings.PulseOrbitSpeed = v / 10 end
     })
-    BangTab:CreateLabel("💫 Orbits with expanding/shrinking radius")
+    BangTab:CreateLabel("💫 Orbits with expanding/shrinking radius (3→60 by default)")
     BangTab:CreateToggle({
         Name = "Headsit", CurrentValue = false, Flag = "HeadsitToggle",
         Callback = function(v)
@@ -1860,7 +1876,39 @@ local function loadOreosHub()
         Name = "❄️ Ice (Light Blue & White)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "ice" end
     })
-    GlowBioTab:CreateLabel("🌈 12 different modes — click any to switch instantly")
+    GlowBioTab:CreateButton({
+        Name = "🌌 Galaxy (Purple & Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "galaxy" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🟢⚫ Matrix (Green & Black)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "matrix" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🩸 Blood (Dark Red & Red)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "blood" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "☢️ Toxic (Lime & Green)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "toxic" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌅 Sunset (Red & Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "sunset" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌊 Ocean (Deep Blue & Teal)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "ocean" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "👑 Royal (Purple & Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "royal" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔮 Cyberpunk (Magenta & Cyan)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cyberpunk" end
+    })
+    GlowBioTab:CreateLabel("🌈 20 different modes — click any to switch instantly")
     GlowBioTab:CreateLabel("⚡ Mode changes apply immediately if Glowing Bio is on")
     GlowBioTab:CreateSection("Glow Speed")
     GlowBioTab:CreateSlider({
@@ -2240,7 +2288,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Pulse Orbit + Username Labels"
+    updateTag.Text = "🆕 Pulse Orbit Fixed + 20 Colors"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
