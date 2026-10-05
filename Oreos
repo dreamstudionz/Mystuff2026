@@ -345,6 +345,26 @@ local function loadOreosHub()
                 alternate(Color3.fromRGB(75, 0, 130), Color3.fromRGB(255, 215, 0))
             elseif mode == "cyberpunk" then
                 alternate(Color3.fromRGB(255, 0, 255), Color3.fromRGB(0, 255, 255))
+            elseif mode == "flamingo" then
+                alternate(Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 182, 193))
+            elseif mode == "mint" then
+                alternate(Color3.fromRGB(152, 255, 152), Color3.fromRGB(0, 200, 130))
+            elseif mode == "candy" then
+                alternate(Color3.fromRGB(255, 105, 180), Color3.fromRGB(135, 206, 250))
+            elseif mode == "peach" then
+                alternate(Color3.fromRGB(255, 170, 120), Color3.fromRGB(255, 218, 185))
+            elseif mode == "emerald" then
+                alternate(Color3.fromRGB(0, 168, 107), Color3.fromRGB(50, 205, 50))
+            elseif mode == "midnight" then
+                alternate(Color3.fromRGB(25, 25, 112), Color3.fromRGB(72, 61, 139))
+            elseif mode == "rose_gold" then
+                alternate(Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 200, 100))
+            elseif mode == "arctic" then
+                alternate(Color3.fromRGB(200, 240, 255), Color3.fromRGB(100, 180, 220))
+            elseif mode == "fireball" then
+                alternate(Color3.fromRGB(255, 69, 0), Color3.fromRGB(255, 255, 100))
+            elseif mode == "venom" then
+                alternate(Color3.fromRGB(50, 205, 50), Color3.fromRGB(75, 0, 130))
             elseif mode == "custom" then
                 applyColors(Settings.BioCustomColor)
             end
@@ -1959,7 +1979,47 @@ local function loadOreosHub()
         Name = "🔮 Cyberpunk (Magenta & Cyan)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "cyberpunk" end
     })
-    GlowBioTab:CreateLabel("🌈 20 different modes — click any to switch instantly")
+    GlowBioTab:CreateButton({
+        Name = "🦩 Flamingo (Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "flamingo" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌿 Mint (Light Green & Teal)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "mint" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🍬 Candy (Pink & Sky Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "candy" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🍑 Peach (Peach & Cream)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "peach" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💚 Emerald (Emerald & Lime)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "emerald" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌙 Midnight (Navy & Indigo)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "midnight" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌹 Rose Gold (Pink & Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "rose_gold" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "❄️ Arctic (Ice Blue & Deep Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "arctic" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔥 Fireball (Red-Orange & Yellow)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "fireball" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🐍 Venom (Green & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "venom" end
+    })
+    GlowBioTab:CreateLabel("🌈 30 different modes — click any to switch instantly")
     GlowBioTab:CreateLabel("⚡ Mode changes apply immediately if Glowing Bio is on")
     GlowBioTab:CreateSection("Glow Speed")
     GlowBioTab:CreateSlider({
@@ -2339,7 +2399,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Vertical Orbit + 20 Colors"
+    updateTag.Text = "🆕 Vertical Orbit + 30 Colors"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
