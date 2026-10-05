@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        GrabToVoid = false,
         GrabFromHead = false,
         VerticalOrbit = false,
         PulseOrbit = false,
@@ -191,6 +192,9 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
+        VoidY = -200,
+        VoidHoldTime = 3,
+        AntiVoidMinY = -260,
         HeadGrabHeight = 3,
         VerticalOrbitTopOffset = 3,
         VerticalOrbitBottomOffset = -3,
@@ -1019,7 +1023,6 @@ local function loadOreosHub()
         local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
         if not targetHRP or not myHRP then return end
 
-        -- Teleport to their front at user-set distance
         local dist = Settings.GrabDistance or 3
         local newCFrame = targetHRP.CFrame * CFrame.new(0, 0, dist)
         myHRP.CFrame = CFrame.new(newCFrame.Position, targetHRP.Position)
@@ -1057,11 +1060,9 @@ local function loadOreosHub()
         local myHumanoid = myChar and myChar:FindFirstChildOfClass("Humanoid")
         if not targetHRP or not myHRP then return end
 
-        -- Pick the head if available, otherwise use HRP
         local anchor = targetHead or targetHRP
         local height = Settings.HeadGrabHeight or 3
 
-        -- Teleport directly ABOVE their head
         local abovePos = anchor.Position + Vector3.new(0, height, 0)
         myHRP.CFrame = CFrame.new(abovePos, abovePos + targetHRP.CFrame.LookVector)
         if myHumanoid then myHumanoid.AutoRotate = false end
@@ -1076,7 +1077,6 @@ local function loadOreosHub()
             lastIGrabbedTime = tick()
         end
 
-        -- Hold position above their head briefly
         local startTime = tick()
         while tick() - startTime < 0.25 do
             if targetHRP.Parent and myHRP.Parent then
@@ -1088,6 +1088,124 @@ local function loadOreosHub()
             RunService.RenderStepped:Wait()
         end
         if myHumanoid then myHumanoid.AutoRotate = true end
+    end
+
+    -- ============================================
+    -- 🕳️ GRAB → VOID → RETURN
+    -- ============================================
+    local voidActive = false
+
+    local voidProtectConn = RunService.Heartbeat:Connect(function()
+        if not voidActive then return end
+        local ch = LocalPlayer.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
+            hrp.CFrame = CFrame.new(hrp.Position.X, Settings.AntiVoidMinY, hrp.Position.Z)
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+    end)
+
+    local function grabToVoidAndReturn(targetPlayer)
+        if not targetPlayer or not targetPlayer.Character then return end
+        local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+        if not targetHRP or not myHRP then return end
+
+        voidActive = true
+        print("[VoidGrab] Starting on", targetPlayer.Name)
+
+        Rayfield:Notify({
+            Title = "🕳️ Void Grab",
+            Content = "Sending " .. targetPlayer.Name .. " to the void...",
+            Duration = 3,
+            Image = 4483362458
+        })
+
+        -- Step 1: Grab
+        local dist = Settings.GrabDistance or 3
+        local front = targetHRP.CFrame * CFrame.new(0, 0, dist)
+        myHRP.CFrame = CFrame.new(front.Position, targetHRP.Position)
+        if myHu then myHu.AutoRotate = false end
+
+        for _ = 1, 10 do
+            pcall(function()
+                if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(targetPlayer)
+                else GrabRF:FireServer(targetPlayer) end
+            end)
+        end
+        lastIGrabbedTime = tick()
+        task.wait(0.2)
+
+        -- Step 2: Void teleport
+        local voidY = Settings.VoidY or -200
+        local voidPos = Vector3.new(targetHRP.Position.X, voidY, targetHRP.Position.Z)
+
+        for _ = 1, 10 do
+            pcall(function()
+                if targetHRP.Parent then
+                    targetHRP.CFrame = CFrame.new(voidPos)
+                    targetHRP.AssemblyLinearVelocity = Vector3.zero
+                end
+                if myHRP.Parent then
+                    myHRP.CFrame = CFrame.new(voidPos + Vector3.new(0, 3, dist))
+                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                end
+            end)
+            task.wait(0.05)
+        end
+
+        -- Step 3: Hold in void
+        local holdTime = Settings.VoidHoldTime or 3
+        local startHold = tick()
+        while tick() - startHold < holdTime do
+            if targetHRP.Parent and myHRP.Parent then
+                pcall(function()
+                    for _ = 1, 3 do
+                        if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(targetPlayer)
+                        else GrabRF:FireServer(targetPlayer) end
+                    end
+                    targetHRP.CFrame = CFrame.new(voidPos)
+                    targetHRP.AssemblyLinearVelocity = Vector3.zero
+                    myHRP.CFrame = CFrame.new(voidPos + Vector3.new(0, 3, dist))
+                    myHRP.AssemblyLinearVelocity = Vector3.zero
+                    lastIGrabbedTime = tick()
+                end)
+            else
+                break
+            end
+            task.wait(0.05)
+        end
+
+        -- Step 4: Return to gym
+        voidActive = false
+
+        local gymPos = Settings.GymPosition
+        if myHRP.Parent then
+            pcall(function()
+                myHRP.CFrame = CFrame.new(gymPos + Vector3.new(0, 3, 5))
+                myHRP.AssemblyLinearVelocity = Vector3.zero
+            end)
+        end
+        if targetHRP.Parent then
+            pcall(function()
+                targetHRP.CFrame = CFrame.new(gymPos + Vector3.new(0, 3, 0))
+                targetHRP.AssemblyLinearVelocity = Vector3.zero
+            end)
+        end
+
+        task.wait(0.3)
+        if myHu then myHu.AutoRotate = true end
+
+        Rayfield:Notify({
+            Title = "🕳️ Void Grab",
+            Content = "Delivered " .. targetPlayer.Name .. " to the gym",
+            Duration = 3,
+            Image = 4483362458
+        })
+        sendWebhookLog("🕳️ Void Grab", "Sent **" .. targetPlayer.Name .. "** to the void and back", 5763719)
+        print("[VoidGrab] Done — returned", targetPlayer.Name, "to gym")
     end
 
     local autoTargetConn = nil
@@ -1544,10 +1662,10 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- PROTECTION LOOPS
+    -- PROTECTION LOOPS (AntiVoid now uses safe Y)
     -- ============================================
     RunService.Heartbeat:Connect(function()
-        if Toggles.AntiRag and not Toggles.FlyActive and not isAnyBangActive() then
+        if Toggles.AntiRag and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
             local ch = LocalPlayer.Character
             if ch then
                 local hu = ch:FindFirstChildOfClass("Humanoid")
@@ -1562,7 +1680,7 @@ local function loadOreosHub()
     end)
 
     RunService.Heartbeat:Connect(function()
-        if Toggles.AntiFling and not Toggles.FlyActive and not isAnyBangActive() then
+        if Toggles.AntiFling and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
             local ch = LocalPlayer.Character
             local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
             if hrp then
@@ -1572,14 +1690,15 @@ local function loadOreosHub()
         end
     end)
 
+    -- Anti-Void with safe Y = -260 (skips during void grab)
     RunService.Heartbeat:Connect(function()
-        if Toggles.AntiVoid then
-            local ch = LocalPlayer.Character
-            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-            if hrp and hrp.Position.Y < -15 then
-                hrp.Velocity = Vector3.new(0, 0, 0)
-                hrp.CFrame = CFrame.new(hrp.Position.X, 50, hrp.Position.Z)
-            end
+        if not Toggles.AntiVoid then return end
+        if voidActive then return end  -- Don't interfere with void grab
+        local ch = LocalPlayer.Character
+        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            hrp.CFrame = CFrame.new(hrp.Position.X, 50, hrp.Position.Z)
         end
     end)
 
@@ -1815,6 +1934,54 @@ local function loadOreosHub()
 
     GrabTab:CreateLabel("🎯 Teleports above their head and grabs from up top")
     GrabTab:CreateLabel("⚠️ Height slider = how far above the head")
+
+    GrabTab:CreateDivider()
+    GrabTab:CreateSection("Grab → Void → Return 🕳️")
+
+    GrabTab:CreateButton({
+        Name = "🕳️ Grab & Send to Void (Player 1)",
+        Callback = function()
+            PlayClickSound()
+            local target = findPlayerByName(Settings.GrabTarget1)
+            if target then task.spawn(function() grabToVoidAndReturn(target) end) end
+        end
+    })
+    GrabTab:CreateButton({
+        Name = "🕳️ Grab & Send to Void (Player 2)",
+        Callback = function()
+            PlayClickSound()
+            local target = findPlayerByName(Settings.GrabTarget2)
+            if target then task.spawn(function() grabToVoidAndReturn(target) end) end
+        end
+    })
+    GrabTab:CreateButton({
+        Name = "🕳️ Grab & Send Both to Void",
+        Callback = function()
+            PlayClickSound()
+            local t1 = findPlayerByName(Settings.GrabTarget1)
+            local t2 = findPlayerByName(Settings.GrabTarget2)
+            if t1 then task.spawn(function() grabToVoidAndReturn(t1) end) end
+            if t2 then
+                task.wait(0.5)
+                task.spawn(function() grabToVoidAndReturn(t2) end)
+            end
+        end
+    })
+
+    GrabTab:CreateSlider({
+        Name = "Void Y Level", Range = {-250, -30}, Increment = 10, Suffix = "Y",
+        CurrentValue = -200, Flag = "VoidY",
+        Callback = function(v) Settings.VoidY = v end
+    })
+    GrabTab:CreateSlider({
+        Name = "Void Hold Time", Range = {1, 10}, Increment = 1, Suffix = "s",
+        CurrentValue = 3, Flag = "VoidHoldTime",
+        Callback = function(v) Settings.VoidHoldTime = v end
+    })
+
+    GrabTab:CreateLabel("🕳️ Grabs target, drags into the void, then returns to gym")
+    GrabTab:CreateLabel("⬇️ Void Y: -200 is safe (kill zone is ~-280)")
+    GrabTab:CreateLabel("⏱️ Hold Time: how long in the void")
 
     GrabTab:CreateSection("Loop Teleport + Grab")
     GrabTab:CreateToggle({
@@ -2151,6 +2318,15 @@ local function loadOreosHub()
             sendWebhookLog("🌀 Anti Void", (v and "**Enabled** Anti Void" or "**Disabled** Anti Void"), v and 5763719 or 15548997)
         end
     })
+
+    ProtectionTab:CreateSlider({
+        Name = "Anti-Void Min Y", Range = {-260, -100}, Increment = 10, Suffix = "Y",
+        CurrentValue = -260, Flag = "AntiVoidMinY",
+        Callback = function(v) Settings.AntiVoidMinY = v end
+    })
+    ProtectionTab:CreateLabel("⬇️ Teleports you up if you fall below this Y")
+    ProtectionTab:CreateLabel("✅ -260 is just above the kill zone (-280)")
+
     ProtectionTab:CreateToggle({
         Name = "Escape Grab (Auto)", CurrentValue = false, Flag = "EscapeGrab",
         Callback = function(v)
@@ -2487,7 +2663,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Head Grab + 30 Colors"
+    updateTag.Text = "🆕 Void Grab + Safe Anti-Void"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
