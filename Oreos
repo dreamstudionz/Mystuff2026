@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        PulseOrbit = false,
         ShowDistance = false,
         FPSBooster = false,
         AutoExitLowHP = false,
@@ -188,6 +189,9 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
+        PulseOrbitMinRadius = 5,
+        PulseOrbitMaxRadius = 25,
+        PulseOrbitSpeed = 1,
         KARange = 50, HitboxSize = 10,
         KATargets = Get("KATargets", ""),
         KASafe    = Get("KASafe", ""),
@@ -691,7 +695,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 📏 PLAYER DISTANCE DISPLAY (username + distance)
+    -- 📏 PLAYER DISTANCE DISPLAY
     -- ============================================
     local distanceConn = nil
     local distanceLabels = {}
@@ -721,7 +725,6 @@ local function loadOreosHub()
         bg.Parent = billboard
         Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
 
-        -- Username (top line) — shows actual username, not display name
         local nameLabel = Instance.new("TextLabel")
         nameLabel.Name = "NameText"
         nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
@@ -735,7 +738,6 @@ local function loadOreosHub()
         nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         nameLabel.Parent = bg
 
-        -- Distance (bottom line)
         local text = Instance.new("TextLabel")
         text.Name = "DistanceText"
         text.Size = UDim2.new(1, 0, 0.5, 0)
@@ -797,7 +799,6 @@ local function loadOreosHub()
                 local nameLabel = bg:FindFirstChild("NameText")
                 local textLabel = bg:FindFirstChild("DistanceText")
 
-                -- Show actual username (not display name)
                 if nameLabel then
                     nameLabel.Text = p.Name
                 end
@@ -1071,7 +1072,7 @@ local function loadOreosHub()
         if bangConn then bangConn:Disconnect() end
         orbitAngle = 0
         bangConn = RunService.Heartbeat:Connect(function()
-            if not (Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang) then return end
+            if not (Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit) then return end
             local target = getBangTarget()
             if not target or not target.Character then return end
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
@@ -1110,6 +1111,22 @@ local function loadOreosHub()
                 myHRP.AssemblyLinearVelocity = Vector3.zero
                 return
             end
+            if Toggles.PulseOrbit then
+                orbitAngle = orbitAngle + (0.05 * Settings.BangSpeed)
+
+                local minR = Settings.PulseOrbitMinRadius
+                local maxR = Settings.PulseOrbitMaxRadius
+                local midR = (maxR + minR) / 2
+                local ampR = (maxR - minR) / 2
+
+                local pulsePhase = tick() * Settings.PulseOrbitSpeed * 2 * math.pi
+                local currentRadius = midR + math.sin(pulsePhase) * ampR
+
+                local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, 0, currentRadius)
+                myHRP.CFrame = targetHRP.CFrame * offset
+                myHRP.AssemblyLinearVelocity = Vector3.zero
+                return
+            end
         end)
     end
 
@@ -1118,7 +1135,7 @@ local function loadOreosHub()
     end
 
     local function isAnyBangActive()
-        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang
+        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit
     end
 
     -- ============================================
@@ -1706,6 +1723,33 @@ local function loadOreosHub()
         end
     })
     BangTab:CreateToggle({
+        Name = "💫 Pulse Orbit (Radius Grows/Shrinks)",
+        CurrentValue = false, Flag = "PulseOrbitToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.PulseOrbit = v
+            if v then startBang() end
+            if not isAnyBangActive() then stopBang() end
+            sendWebhookLog("💫 Pulse Orbit", (v and "**Enabled** Pulse Orbit" or "**Disabled** Pulse Orbit"), v and 5763719 or 15548997)
+        end
+    })
+    BangTab:CreateSlider({
+        Name = "Pulse Min Radius", Range = {1, 50}, Increment = 1, Suffix = "studs",
+        CurrentValue = 5, Flag = "PulseOrbitMinRadius",
+        Callback = function(v) Settings.PulseOrbitMinRadius = v end
+    })
+    BangTab:CreateSlider({
+        Name = "Pulse Max Radius", Range = {5, 100}, Increment = 1, Suffix = "studs",
+        CurrentValue = 25, Flag = "PulseOrbitMaxRadius",
+        Callback = function(v) Settings.PulseOrbitMaxRadius = v end
+    })
+    BangTab:CreateSlider({
+        Name = "Pulse Speed", Range = {1, 10}, Increment = 1, Suffix = "x",
+        CurrentValue = 1, Flag = "PulseOrbitSpeed",
+        Callback = function(v) Settings.PulseOrbitSpeed = v end
+    })
+    BangTab:CreateLabel("💫 Orbits with expanding/shrinking radius")
+    BangTab:CreateToggle({
         Name = "Headsit", CurrentValue = false, Flag = "HeadsitToggle",
         Callback = function(v)
             PlayClickSound()
@@ -2196,7 +2240,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Username + Distance Labels"
+    updateTag.Text = "🆕 Pulse Orbit + Username Labels"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
