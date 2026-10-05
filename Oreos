@@ -172,6 +172,7 @@ local function loadOreosHub()
     end
 
     local Toggles = {
+        VerticalOrbit = false,
         PulseOrbit = false,
         ShowDistance = false,
         FPSBooster = false,
@@ -189,6 +190,9 @@ local function loadOreosHub()
         TpGrabLoop = false,
     }
     local Settings = {
+        VerticalOrbitTopOffset = 3,
+        VerticalOrbitBottomOffset = -3,
+        VerticalOrbitSpeed = 1,
         PulseOrbitMinRadius = 3,
         PulseOrbitMaxRadius = 60,
         PulseOrbitSpeed = 0.5,
@@ -1088,7 +1092,7 @@ local function loadOreosHub()
         if bangConn then bangConn:Disconnect() end
         orbitAngle = 0
         bangConn = RunService.Heartbeat:Connect(function()
-            if not (Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit) then return end
+            if not (Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit) then return end
             local target = getBangTarget()
             if not target or not target.Character then return end
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
@@ -1143,6 +1147,26 @@ local function loadOreosHub()
                 myHRP.AssemblyLinearVelocity = Vector3.zero
                 return
             end
+            if Toggles.VerticalOrbit then
+                orbitAngle = orbitAngle + (0.02 * Settings.BangSpeed)
+
+                local pulsePhase = tick() * Settings.VerticalOrbitSpeed * math.pi
+
+                local topY = Settings.VerticalOrbitTopOffset
+                local bottomY = Settings.VerticalOrbitBottomOffset
+
+                local midY = (topY + bottomY) / 2
+                local ampY = (topY - bottomY) / 2
+
+                local currentY = midY + math.sin(pulsePhase) * ampY
+
+                local horizontalRadius = 3
+
+                local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, currentY, horizontalRadius)
+                myHRP.CFrame = targetHRP.CFrame * offset
+                myHRP.AssemblyLinearVelocity = Vector3.zero
+                return
+            end
         end)
     end
 
@@ -1151,7 +1175,7 @@ local function loadOreosHub()
     end
 
     local function isAnyBangActive()
-        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit
+        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit
     end
 
     -- ============================================
@@ -1766,6 +1790,33 @@ local function loadOreosHub()
     })
     BangTab:CreateLabel("💫 Orbits with expanding/shrinking radius (3→60 by default)")
     BangTab:CreateToggle({
+        Name = "↕️ Vertical Orbit (Head to Toe)",
+        CurrentValue = false, Flag = "VerticalOrbitToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.VerticalOrbit = v
+            if v then startBang() end
+            if not isAnyBangActive() then stopBang() end
+            sendWebhookLog("↕️ Vertical Orbit", (v and "**Enabled** Vertical Orbit" or "**Disabled** Vertical Orbit"), v and 5763719 or 15548997)
+        end
+    })
+    BangTab:CreateSlider({
+        Name = "Vertical Top Offset", Range = {0, 10}, Increment = 1, Suffix = "studs",
+        CurrentValue = 3, Flag = "VerticalOrbitTopOffset",
+        Callback = function(v) Settings.VerticalOrbitTopOffset = v end
+    })
+    BangTab:CreateSlider({
+        Name = "Vertical Bottom Offset", Range = {-10, 0}, Increment = 1, Suffix = "studs",
+        CurrentValue = -3, Flag = "VerticalOrbitBottomOffset",
+        Callback = function(v) Settings.VerticalOrbitBottomOffset = v end
+    })
+    BangTab:CreateSlider({
+        Name = "Vertical Speed", Range = {1, 20}, Increment = 1, Suffix = "x0.1/s",
+        CurrentValue = 10, Flag = "VerticalOrbitSpeed",
+        Callback = function(v) Settings.VerticalOrbitSpeed = v / 10 end
+    })
+    BangTab:CreateLabel("↕️ Sweeps you from above their head to below their feet")
+    BangTab:CreateToggle({
         Name = "Headsit", CurrentValue = false, Flag = "HeadsitToggle",
         Callback = function(v)
             PlayClickSound()
@@ -2288,7 +2339,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Pulse Orbit Fixed + 20 Colors"
+    updateTag.Text = "🆕 Vertical Orbit + 20 Colors"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
