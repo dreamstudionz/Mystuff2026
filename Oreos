@@ -15,7 +15,7 @@ local LocalPlayer = Players.LocalPlayer
 -- ⚙️ CONFIG
 -- ============================================
 local CONFIG = {
-    ValidKey = "Oreo2",
+    ValidKey = "Oreothe1",
     Title = "Key System",
     Subtitle = "To get the key, contact me on discord @oreo.fv",
     PlaceholderText = "key",
@@ -205,6 +205,7 @@ local function loadOreosHub()
         KARange = 50, HitboxSize = 10,
         KATargets = Get("KATargets", ""),
         KASafe    = Get("KASafe", ""),
+        KAHealthStop = Get("KAHealthStop", 10),
         WalkSpeed = 50, FlySpeed = 100, FlyHoldTime = 0.15,
         BangTarget = "", BangSpeed = 1,
         BioColorMode = "black_white",
@@ -371,6 +372,46 @@ local function loadOreosHub()
                 alternate(Color3.fromRGB(255, 69, 0), Color3.fromRGB(255, 255, 100))
             elseif mode == "venom" then
                 alternate(Color3.fromRGB(50, 205, 50), Color3.fromRGB(75, 0, 130))
+            elseif mode == "cotton_candy" then
+                alternate(Color3.fromRGB(255, 180, 220), Color3.fromRGB(180, 220, 255))
+            elseif mode == "dark_ocean" then
+                alternate(Color3.fromRGB(0, 30, 60), Color3.fromRGB(0, 90, 120))
+            elseif mode == "cherry" then
+                alternate(Color3.fromRGB(200, 0, 50), Color3.fromRGB(255, 100, 120))
+            elseif mode == "golden_fire" then
+                alternate(Color3.fromRGB(255, 200, 0), Color3.fromRGB(255, 80, 0))
+            elseif mode == "deep_sea" then
+                alternate(Color3.fromRGB(0, 40, 80), Color3.fromRGB(0, 180, 200))
+            elseif mode == "lavender" then
+                alternate(Color3.fromRGB(180, 150, 255), Color3.fromRGB(230, 200, 255))
+            elseif mode == "copper" then
+                alternate(Color3.fromRGB(184, 115, 51), Color3.fromRGB(255, 160, 100))
+            elseif mode == "plasma" then
+                alternate(Color3.fromRGB(255, 0, 200), Color3.fromRGB(0, 255, 255))
+            elseif mode == "volcano" then
+                alternate(Color3.fromRGB(60, 0, 0), Color3.fromRGB(255, 50, 0))
+            elseif mode == "aurora" then
+                alternate(Color3.fromRGB(0, 255, 150), Color3.fromRGB(150, 0, 255))
+            elseif mode == "sakura" then
+                alternate(Color3.fromRGB(255, 183, 197), Color3.fromRGB(255, 220, 230))
+            elseif mode == "neon_pink" then
+                alternate(Color3.fromRGB(255, 0, 150), Color3.fromRGB(255, 100, 200))
+            elseif mode == "radioactive" then
+                alternate(Color3.fromRGB(200, 255, 0), Color3.fromRGB(0, 255, 80))
+            elseif mode == "stealth" then
+                alternate(Color3.fromRGB(20, 20, 20), Color3.fromRGB(60, 60, 60))
+            elseif mode == "golden_royal" then
+                alternate(Color3.fromRGB(255, 215, 0), Color3.fromRGB(138, 43, 226))
+            elseif mode == "silver_frost" then
+                alternate(Color3.fromRGB(220, 230, 240), Color3.fromRGB(130, 160, 200))
+            elseif mode == "tropical" then
+                alternate(Color3.fromRGB(0, 255, 180), Color3.fromRGB(255, 255, 0))
+            elseif mode == "red_white_blue" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 0, 255))
+            elseif mode == "green_white_orange" then
+                alternate(Color3.fromRGB(0, 150, 0), Color3.fromRGB(255, 120, 0))
+            elseif mode == "halloween" then
+                alternate(Color3.fromRGB(255, 100, 0), Color3.fromRGB(80, 0, 120))
             elseif mode == "custom" then
                 applyColors(Settings.BioCustomColor)
             end
@@ -1414,13 +1455,22 @@ local function loadOreosHub()
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
                 if hrp and hum and hum.Health > 0 then
-                    local dist = (hrp.Position - myHRP.Position).Magnitude
-                    if dist <= Settings.KARange and dist < nearDist then
-                        nearDist = dist
-                        nearest = {
-                            hum = hum,
-                            pos = hrp.Position + hrp.CFrame.LookVector * 2
-                        }
+                    -- 🩸 Health stop check: skip if target is at or below threshold
+                    local healthPercent = hum.Health / hum.MaxHealth * 100
+                    local shouldHit = true
+                    if Settings.KAHealthStop > 0 and healthPercent <= Settings.KAHealthStop then
+                        shouldHit = false
+                    end
+
+                    if shouldHit then
+                        local dist = (hrp.Position - myHRP.Position).Magnitude
+                        if dist <= Settings.KARange and dist < nearDist then
+                            nearDist = dist
+                            nearest = {
+                                hum = hum,
+                                pos = hrp.Position + hrp.CFrame.LookVector * 2
+                            }
+                        end
                     end
                 end
             end
@@ -1809,6 +1859,95 @@ local function loadOreosHub()
         CurrentValue = Get("KASafe", ""),
         Callback = function(text) Settings.KASafe = text; Set("KASafe", text) end
     })
+
+    AuraKillTab:CreateDivider()
+    AuraKillTab:CreateSection("🩸 Health Stop Threshold")
+    AuraKillTab:CreateLabel("⚔️ Kill Aura stops hitting when target reaches this % HP")
+    AuraKillTab:CreateLabel("💡 Use 10% to leave them almost dead but alive")
+
+    AuraKillTab:CreateButton({
+        Name = "🩸 Stop at 10% HP (Recommended)",
+        Callback = function()
+            PlayClickSound()
+            Settings.KAHealthStop = 10
+            Set("KAHealthStop", 10)
+            Rayfield:Notify({
+                Title = "🩸 Kill Aura",
+                Content = "Will stop at 10% HP",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🩸 KA Health Stop", "Set to **10%**", 5763719)
+        end
+    })
+
+    AuraKillTab:CreateButton({
+        Name = "🩸 Stop at 15% HP",
+        Callback = function()
+            PlayClickSound()
+            Settings.KAHealthStop = 15
+            Set("KAHealthStop", 15)
+            Rayfield:Notify({
+                Title = "🩸 Kill Aura",
+                Content = "Will stop at 15% HP",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🩸 KA Health Stop", "Set to **15%**", 5763719)
+        end
+    })
+
+    AuraKillTab:CreateButton({
+        Name = "🩸 Stop at 50% HP",
+        Callback = function()
+            PlayClickSound()
+            Settings.KAHealthStop = 50
+            Set("KAHealthStop", 50)
+            Rayfield:Notify({
+                Title = "🩸 Kill Aura",
+                Content = "Will stop at 50% HP",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("🩸 KA Health Stop", "Set to **50%**", 5763719)
+        end
+    })
+
+    AuraKillTab:CreateButton({
+        Name = "💀 Full Kill Mode (No Stop)",
+        Callback = function()
+            PlayClickSound()
+            Settings.KAHealthStop = 0
+            Set("KAHealthStop", 0)
+            Rayfield:Notify({
+                Title = "💀 Kill Aura",
+                Content = "Full kill mode — no HP stop",
+                Duration = 3,
+                Image = 4483362458
+            })
+            sendWebhookLog("💀 KA Health Stop", "Disabled (full kill)", 15548997)
+        end
+    })
+
+    AuraKillTab:CreateSlider({
+        Name = "Custom HP Stop %",
+        Range = {0, 100}, Increment = 5, Suffix = "% HP",
+        CurrentValue = Get("KAHealthStop", 10), Flag = "KAHealthStopSlider",
+        Callback = function(v)
+            Settings.KAHealthStop = v
+            Set("KAHealthStop", v)
+            if v == 0 then
+                Rayfield:Notify({ Title = "💀 Kill Aura", Content = "Full kill mode", Duration = 2, Image = 4483362458 })
+            else
+                Rayfield:Notify({ Title = "🩸 Kill Aura", Content = "Stop at " .. v .. "% HP", Duration = 2, Image = 4483362458 })
+            end
+        end
+    })
+
+    AuraKillTab:CreateLabel("0% = never stops (full kill)")
+    AuraKillTab:CreateLabel("10% = leaves target nearly dead but alive ✅")
+
+    AuraKillTab:CreateDivider()
     AuraKillTab:CreateSection("Hitbox Expander")
     AuraKillTab:CreateToggle({
         Name = "Hitbox", CurrentValue = false, Flag = "HitboxToggle",
@@ -2274,7 +2413,89 @@ local function loadOreosHub()
         Name = "🐍 Venom (Green & Purple)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "venom" end
     })
-    GlowBioTab:CreateLabel("🌈 30 different modes — click any to switch instantly")
+    -- ============ NEW COLORS START ============
+    GlowBioTab:CreateButton({
+        Name = "🍬 Cotton Candy (Pink & Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cotton_candy" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌊 Dark Ocean (Deep Blue & Teal)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "dark_ocean" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🍒 Cherry (Deep Red & Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cherry" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔥 Golden Fire (Gold & Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "golden_fire" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🐚 Deep Sea (Navy & Cyan)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "deep_sea" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💜 Lavender (Purple & Light Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "lavender" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🪙 Copper (Brown & Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "copper" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "⚡ Plasma (Magenta & Cyan)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "plasma" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌋 Volcano (Dark Red & Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "volcano" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌌 Aurora (Teal & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "aurora" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌸 Sakura (Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "sakura" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💗 Neon Pink (Hot Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "neon_pink" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "☢️ Radioactive (Yellow-Green & Green)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "radioactive" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🥷 Stealth (Dark Gray & Gray)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "stealth" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "👑 Golden Royal (Gold & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "golden_royal" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "❄️ Silver Frost (Silver & Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "silver_frost" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🏝️ Tropical (Teal & Yellow)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "tropical" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🇺🇸 Red White Blue (Red & Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "red_white_blue" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🇮🇪 Green White Orange",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "green_white_orange" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🎃 Halloween (Orange & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "halloween" end
+    })
+    -- ============ NEW COLORS END ============
+    GlowBioTab:CreateLabel("🌈 50 different modes — click any to switch instantly")
     GlowBioTab:CreateLabel("⚡ Mode changes apply immediately if Glowing Bio is on")
     GlowBioTab:CreateSection("Glow Speed")
     GlowBioTab:CreateSlider({
@@ -2663,7 +2884,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Void Grab + Safe Anti-Void"
+    updateTag.Text = "🆕 50 Bio Colors + Health Stop Options"
     updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
