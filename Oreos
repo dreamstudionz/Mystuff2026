@@ -107,7 +107,7 @@ local function loadOreosHub()
         Name = "🍪 Oreo's Hub",
         LoadingTitle = "Oreo's Hub",
         LoadingSubtitle = "Loading...",
-        Theme = "Ocean",
+        Theme = "Amethyst",
         ConfigurationSaving = { Enabled = true, FolderName = "OreosHub", FileName = "Main" },
         KeySystem = false
     })
@@ -574,7 +574,7 @@ local function loadOreosHub()
         outline.Name = "SkyOutline"
         outline.Adornee = plat
         outline.LineThickness = 0.1
-        outline.Color3 = Color3.fromRGB(120, 200, 255)
+        outline.Color3 = Color3.fromRGB(160, 100, 255)
         outline.Transparency = 0.7
         outline.Parent = plat
 
@@ -818,7 +818,7 @@ local function loadOreosHub()
         nameLabel.Position = UDim2.new(0, 0, 0, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = player.Name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+        nameLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.TextSize = 14
         nameLabel.TextStrokeTransparency = 0
@@ -2703,7 +2703,7 @@ local function loadOreosHub()
     })
 
     SettingsTab:CreateLabel("📏 Shows username + stud distance above every player's head")
-    SettingsTab:CreateLabel("🟡 Username in gold | Distance color: 🔴<10 🟡<30 🟢<100 ⚪far")
+    SettingsTab:CreateLabel("🟣 Username in purple | Distance color: 🔴<10 🟡<30 🟢<100 ⚪far")
     SettingsTab:CreateLabel("⚠️ Visual only — nobody else sees it")
 
     SettingsTab:CreateDivider()
@@ -2756,7 +2756,7 @@ local function loadOreosHub()
         outline.Name = "SkyOutline"
         outline.Adornee = plat
         outline.LineThickness = 0.1
-        outline.Color3 = Color3.fromRGB(120, 200, 255)
+        outline.Color3 = Color3.fromRGB(160, 100, 255)
         outline.Transparency = 0.7
         outline.Parent = plat
 
@@ -2869,13 +2869,13 @@ local function createKeySystem()
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 400, 0, 250)
     frame.Position = UDim2.new(0.5, -200, 0.5, -125)
-    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
     frame.BorderSizePixel = 0
     frame.Parent = gui
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Color = Color3.fromRGB(160, 100, 255)
     stroke.Thickness = 1.5
     stroke.Transparency = 0.3
     stroke.Parent = frame
@@ -2885,7 +2885,7 @@ local function createKeySystem()
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
     updateTag.Text = "🆕 50 Bio Colors + Health Stop Options"
-    updateTag.TextColor3 = Color3.fromRGB(80, 255, 140)
+    updateTag.TextColor3 = Color3.fromRGB(180, 130, 255)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
     updateTag.TextXAlignment = Enum.TextXAlignment.Left
@@ -2907,7 +2907,7 @@ local function createKeySystem()
     subtitle.Position = UDim2.new(0, 20, 0, 52)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = CONFIG.Subtitle
-    subtitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+    subtitle.TextColor3 = Color3.fromRGB(190, 180, 210)
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
     subtitle.Font = Enum.Font.Gotham
     subtitle.TextSize = 12
@@ -2916,7 +2916,7 @@ local function createKeySystem()
     local inputFrame = Instance.new("Frame")
     inputFrame.Size = UDim2.new(1, -40, 0, 40)
     inputFrame.Position = UDim2.new(0, 20, 0, 90)
-    inputFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    inputFrame.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
     inputFrame.BorderSizePixel = 0
     inputFrame.Parent = frame
     Instance.new("UICorner", inputFrame).CornerRadius = UDim.new(0, 8)
@@ -2926,7 +2926,7 @@ local function createKeySystem()
     keyInput.Position = UDim2.new(0, 10, 0, 0)
     keyInput.BackgroundTransparency = 1
     keyInput.PlaceholderText = CONFIG.PlaceholderText
-    keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+    keyInput.PlaceholderColor3 = Color3.fromRGB(140, 130, 160)
     keyInput.Text = ""
     keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     keyInput.TextXAlignment = Enum.TextXAlignment.Left
@@ -2938,9 +2938,9 @@ local function createKeySystem()
     local submitBtn = Instance.new("TextButton")
     submitBtn.Size = UDim2.new(1, -40, 0, 40)
     submitBtn.Position = UDim2.new(0, 20, 0, 148)
-    submitBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    submitBtn.BackgroundColor3 = Color3.fromRGB(160, 100, 255)
     submitBtn.Text = "SUBMIT"
-    submitBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    submitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     submitBtn.Font = Enum.Font.GothamBold
     submitBtn.TextSize = 14
     submitBtn.BorderSizePixel = 0
@@ -2992,7 +2992,7 @@ local function createKeySystem()
     closeBtn.Position = UDim2.new(1, -40, 0, 10)
     closeBtn.BackgroundTransparency = 1
     closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    closeBtn.TextColor3 = Color3.fromRGB(190, 170, 220)
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.TextSize = 18
     closeBtn.Parent = frame
