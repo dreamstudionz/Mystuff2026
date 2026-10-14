@@ -15,7 +15,7 @@ local LocalPlayer = Players.LocalPlayer
 -- ⚙️ CONFIG
 -- ============================================
 local CONFIG = {
-    ValidKey = "Oreothe1",
+    ValidKey = "Oreo2",
     Title = "Key System",
     Subtitle = "To get the key, contact me on discord @oreo.fv",
     PlaceholderText = "key",
