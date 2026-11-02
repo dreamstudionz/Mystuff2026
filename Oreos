@@ -1,17 +1,17 @@
 -- ============================================
--- OREO'S HUB - FULL SCRIPT (RESET PANEL + ORIGINAL BIO)
+-- OREO'S HUB - FULL SCRIPT (FAST MODE BANG INTEGRATED)
 -- ============================================
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService") -- ADDED FOR RESET PANEL
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
-local resetConn = nil -- ADDED FOR AUTO RESET TRACKING
+local resetConn = nil
 
 -- ============================================
 -- ⚙️ CONFIG
@@ -192,6 +192,7 @@ local function loadOreosHub()
         NameGlow = false,
         AutoTarget = false,
         TpGrabLoop = false,
+        FastModeBang = false, -- NEW: FAST MODE TOGGLE
     }
     local Settings = {
         VoidY = -200,
@@ -286,7 +287,6 @@ local function loadOreosHub()
         if Toggles.NameGlow then applyRPNameColorOnly(color) end
     end
 
-    -- ORIGINAL startGlowBio FUNCTION (NO PULSE ENGINE)
     local function startGlowBio()
         if bioConn then bioConn:Disconnect() end
         applyBioText(Settings.BioText)
@@ -1298,10 +1298,11 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- BANG SYSTEM
+    -- BANG SYSTEM WITH FAST MODE
     -- ============================================
     local bangConn = nil
     local orbitAngle = 0
+    local fastBangConn = nil -- Separate connection for fast mode
 
     local function getBangTarget()
         local name = Settings.BangTarget
@@ -1317,11 +1318,17 @@ local function loadOreosHub()
         return nil
     end
 
-    local function startBang()
+    -- Helper to check if ANY bang action is active
+    local function isAnyBangActive()
+        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit
+    end
+
+    -- STANDARD BANG LOOP (Heartbeat-based, original behavior)
+    local function startStandardBang()
         if bangConn then bangConn:Disconnect() end
         orbitAngle = 0
         bangConn = RunService.Heartbeat:Connect(function()
-            if not (Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit) then return end
+            if not isAnyBangActive() then return end
             local target = getBangTarget()
             if not target or not target.Character then return end
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
@@ -1362,15 +1369,12 @@ local function loadOreosHub()
             end
             if Toggles.PulseOrbit then
                 orbitAngle = orbitAngle + (0.03 * Settings.BangSpeed)
-
                 local minR = Settings.PulseOrbitMinRadius
                 local maxR = Settings.PulseOrbitMaxRadius
                 local midR = (maxR + minR) / 2
                 local ampR = (maxR - minR) / 2
-
                 local pulsePhase = tick() * Settings.PulseOrbitSpeed * 2 * math.pi
                 local currentRadius = midR + math.sin(pulsePhase) * ampR
-
                 local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, 0, currentRadius)
                 myHRP.CFrame = targetHRP.CFrame * offset
                 myHRP.AssemblyLinearVelocity = Vector3.zero
@@ -1378,19 +1382,13 @@ local function loadOreosHub()
             end
             if Toggles.VerticalOrbit then
                 orbitAngle = orbitAngle + (0.02 * Settings.BangSpeed)
-
                 local pulsePhase = tick() * Settings.VerticalOrbitSpeed * math.pi
-
                 local topY = Settings.VerticalOrbitTopOffset
                 local bottomY = Settings.VerticalOrbitBottomOffset
-
                 local midY = (topY + bottomY) / 2
                 local ampY = (topY - bottomY) / 2
-
                 local currentY = midY + math.sin(pulsePhase) * ampY
-
                 local horizontalRadius = 3
-
                 local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, currentY, horizontalRadius)
                 myHRP.CFrame = targetHRP.CFrame * offset
                 myHRP.AssemblyLinearVelocity = Vector3.zero
@@ -1399,12 +1397,86 @@ local function loadOreosHub()
         end)
     end
 
-    local function stopBang()
-        if bangConn then bangConn:Disconnect(); bangConn = nil end
+    -- ⚡ FAST MODE BANG LOOP (RenderStepped-based, zero delay)
+    local function startFastBang()
+        if fastBangConn then fastBangConn:Disconnect() end
+        orbitAngle = 0
+        
+        fastBangConn = RunService.RenderStepped:Connect(function(dt)
+            if not Toggles.FastModeBang or not isAnyBangActive() then return end
+            
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+            if not myHRP or not myHu then return end
+            
+            -- Disable auto-rotate and platform stand for instant snapping
+            myHu.AutoRotate = false
+            myHu.PlatformStand = false
+            
+            local target = getBangTarget()
+            if not target or not target.Character then return end
+            
+            local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetHead = target.Character:FindFirstChild("Head")
+            if not targetHRP then return end
+
+            -- ⚡ ZERO-DELAY DIRECT CFRAME ASSIGNMENT FOR ALL MODES
+            if Toggles.Bang then
+                local bangOffset = 1.1 + math.sin(tick() * (Settings.BangSpeed * 20)) * 0.8
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, bangOffset)
+            elseif Toggles.MouthBang and targetHead then
+                local mouthOffset = -1.2 - math.sin(tick() * (Settings.BangSpeed * 20)) * 0.8
+                myHRP.CFrame = targetHead.CFrame * CFrame.new(0, 0.2, mouthOffset) * CFrame.Angles(0, math.pi, 0)
+            elseif Toggles.Attach then
+                myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 1.2)
+            elseif Toggles.Headsit and targetHead then
+                myHRP.CFrame = targetHead.CFrame * CFrame.new(0, 0.5, 0)
+            elseif Toggles.Orbit then
+                orbitAngle = orbitAngle + (0.05 * Settings.BangSpeed)
+                local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, 0, 5)
+                myHRP.CFrame = targetHRP.CFrame * offset
+            elseif Toggles.PulseOrbit then
+                orbitAngle = orbitAngle + (0.03 * Settings.BangSpeed)
+                local minR = Settings.PulseOrbitMinRadius
+                local maxR = Settings.PulseOrbitMaxRadius
+                local midR = (maxR + minR) / 2
+                local ampR = (maxR - minR) / 2
+                local pulsePhase = tick() * Settings.PulseOrbitSpeed * 2 * math.pi
+                local currentRadius = midR + math.sin(pulsePhase) * ampR
+                local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, 0, currentRadius)
+                myHRP.CFrame = targetHRP.CFrame * offset
+            elseif Toggles.VerticalOrbit then
+                orbitAngle = orbitAngle + (0.02 * Settings.BangSpeed)
+                local pulsePhase = tick() * Settings.VerticalOrbitSpeed * math.pi
+                local topY = Settings.VerticalOrbitTopOffset
+                local bottomY = Settings.VerticalOrbitBottomOffset
+                local midY = (topY + bottomY) / 2
+                local ampY = (topY - bottomY) / 2
+                local currentY = midY + math.sin(pulsePhase) * ampY
+                local horizontalRadius = 3
+                local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, currentY, horizontalRadius)
+                myHRP.CFrame = targetHRP.CFrame * offset
+            end
+            
+            -- Nullify velocity every frame to prevent physics fighting
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+        end)
     end
 
-    local function isAnyBangActive()
-        return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit
+    local function stopBang()
+        if bangConn then bangConn:Disconnect(); bangConn = nil end
+        if fastBangConn then fastBangConn:Disconnect(); fastBangConn = nil end
+    end
+
+    -- Unified start function that picks the right loop based on Fast Mode
+    local function startBangUnified()
+        if Toggles.FastModeBang then
+            startFastBang()
+        else
+            startStandardBang()
+        end
     end
 
     -- ============================================
@@ -1457,7 +1529,6 @@ local function loadOreosHub()
                 local hum = p.Character:FindFirstChildOfClass("Humanoid")
 
                 if hrp and hum and hum.Health > 0 then
-                    -- 🩸 Health stop check: skip if target is at or below threshold
                     local healthPercent = hum.Health / hum.MaxHealth * 100
                     local shouldHit = true
                     if Settings.KAHealthStop > 0 and healthPercent <= Settings.KAHealthStop then
@@ -2135,7 +2206,7 @@ local function loadOreosHub()
         end
     })
 
-    -- BANG TAB
+    -- BANG TAB (WITH FAST MODE INTEGRATED)
     local BangTab = Window:CreateTab("Bang 🍪")
     BangTab:CreateSection("Target")
     BangTab:CreateInput({
@@ -2147,13 +2218,38 @@ local function loadOreosHub()
         CurrentValue = 1, Flag = "BangSpeed",
         Callback = function(v) Settings.BangSpeed = v end
     })
+    
+    -- ⚡ FAST MODE TOGGLE
+    BangTab:CreateDivider()
+    BangTab:CreateSection("⚡ Performance")
+    BangTab:CreateToggle({
+        Name = "⚡ Fast Mode (Zero Delay - All Modes)",
+        CurrentValue = false,
+        Flag = "FastModeBangToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.FastModeBang = v
+            -- Restart the active bang loop with the correct engine
+            if isAnyBangActive() then
+                stopBang()
+                task.wait(0.05)
+                startBangUnified()
+            end
+            sendWebhookLog("⚡ Fast Mode Bang", (v and "**Enabled** Zero-Delay Bang" or "**Disabled** Zero-Delay Bang"), v and 5763719 or 15548997)
+        end
+    })
+    BangTab:CreateLabel("⚡ Uses RenderStepped + direct CFrame assignment")
+    BangTab:CreateLabel("✅ Eliminates all interpolation and physics delay")
+    BangTab:CreateLabel("⚠️ Applies to ALL bang modes when enabled")
+    
+    BangTab:CreateDivider()
     BangTab:CreateSection("Bang Actions")
     BangTab:CreateToggle({
         Name = "Bang", CurrentValue = false, Flag = "BangToggle",
         Callback = function(v)
             PlayClickSound()
             Toggles.Bang = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("🍑 Bang", (v and "**Enabled** Bang" or "**Disabled** Bang"), v and 5763719 or 15548997)
         end
@@ -2163,7 +2259,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.MouthBang = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("👄 Mouth Bang", (v and "**Enabled** Mouth Bang" or "**Disabled** Mouth Bang"), v and 5763719 or 15548997)
         end
@@ -2173,7 +2269,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.Orbit = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("🌀 Orbit", (v and "**Enabled** Orbit" or "**Disabled** Orbit"), v and 5763719 or 15548997)
         end
@@ -2184,7 +2280,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.PulseOrbit = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("💫 Pulse Orbit", (v and "**Enabled** Pulse Orbit" or "**Disabled** Pulse Orbit"), v and 5763719 or 15548997)
         end
@@ -2211,7 +2307,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.VerticalOrbit = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("↕️ Vertical Orbit", (v and "**Enabled** Vertical Orbit" or "**Disabled** Vertical Orbit"), v and 5763719 or 15548997)
         end
@@ -2237,7 +2333,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.Headsit = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("🪑 Headsit", (v and "**Enabled** Headsit" or "**Disabled** Headsit"), v and 5763719 or 15548997)
         end
@@ -2247,13 +2343,13 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.Attach = v
-            if v then startBang() end
+            if v then startBangUnified() end
             if not isAnyBangActive() then stopBang() end
             sendWebhookLog("📎 Attach", (v and "**Enabled** Attach" or "**Disabled** Attach"), v and 5763719 or 15548997)
         end
     })
 
-    -- GLOWING BIO TAB (ORIGINAL VERSION - NO PULSE ENGINE)
+    -- GLOWING BIO TAB
     local GlowBioTab = Window:CreateTab("Glowing Bio 🍪")
     GlowBioTab:CreateSection("Bio Text")
     GlowBioTab:CreateInput({
@@ -2871,7 +2967,6 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             if v then
-                -- Start listening for deaths
                 resetConn = LocalPlayer.CharacterAdded:Connect(function(char)
                     task.wait(0.5)
                     local hu = char:FindFirstChildOfClass("Humanoid")
@@ -2887,7 +2982,6 @@ local function loadOreosHub()
                     end
                 end)
                 
-                -- Hook into current character immediately
                 if LocalPlayer.Character then
                     local hu = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                     if hu then
@@ -2904,7 +2998,6 @@ local function loadOreosHub()
                 
                 Rayfield:Notify({ Title = "🔄 Auto Reset", Content = "Enabled! Will auto-respawn on death.", Duration = 3, Image = 4483362458 })
             else
-                -- Stop listening
                 if resetConn then 
                     resetConn:Disconnect() 
                     resetConn = nil 
@@ -2964,7 +3057,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Reset Panel Integrated into Settings"
+    updateTag.Text = "🆕 Fast Mode Bang + Reset Panel"
     updateTag.TextColor3 = Color3.fromRGB(180, 130, 255)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
