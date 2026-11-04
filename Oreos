@@ -192,7 +192,7 @@ local function loadOreosHub()
         NameGlow = false,
         AutoTarget = false,
         TpGrabLoop = false,
-        FastModeBang = false, -- NEW: FAST MODE TOGGLE
+        FastModeBang = false,
     }
     local Settings = {
         VoidY = -200,
@@ -414,6 +414,96 @@ local function loadOreosHub()
                 alternate(Color3.fromRGB(0, 150, 0), Color3.fromRGB(255, 120, 0))
             elseif mode == "halloween" then
                 alternate(Color3.fromRGB(255, 100, 0), Color3.fromRGB(80, 0, 120))
+
+            -- ===== NEW BIO COLORS (added) =====
+            elseif mode == "toxic_waste" then
+                alternate(Color3.fromRGB(127, 255, 0), Color3.fromRGB(75, 0, 130))
+            elseif mode == "cherry_blossom" then
+                alternate(Color3.fromRGB(255, 183, 197), Color3.fromRGB(255, 105, 180))
+            elseif mode == "electric_blue" then
+                alternate(Color3.fromRGB(0, 191, 255), Color3.fromRGB(0, 100, 255))
+            elseif mode == "sunset_orange" then
+                alternate(Color3.fromRGB(255, 140, 0), Color3.fromRGB(255, 69, 0))
+            elseif mode == "purple_rain" then
+                alternate(Color3.fromRGB(138, 43, 226), Color3.fromRGB(75, 0, 130))
+            elseif mode == "gold_rush" then
+                alternate(Color3.fromRGB(255, 215, 0), Color3.fromRGB(218, 165, 32))
+            elseif mode == "red_alert" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(139, 0, 0))
+            elseif mode == "cyan_fire" then
+                alternate(Color3.fromRGB(0, 255, 255), Color3.fromRGB(0, 150, 150))
+            elseif mode == "magenta_blast" then
+                alternate(Color3.fromRGB(255, 0, 255), Color3.fromRGB(128, 0, 128))
+            elseif mode == "mint_condition" then
+                alternate(Color3.fromRGB(152, 255, 152), Color3.fromRGB(0, 168, 107))
+            elseif mode == "vaporwave" then
+                alternate(Color3.fromRGB(255, 113, 206), Color3.fromRGB(1, 205, 254))
+            elseif mode == "black_ops" then
+                alternate(Color3.fromRGB(0, 0, 0), Color3.fromRGB(40, 40, 40))
+            elseif mode == "white_heat" then
+                alternate(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 200, 200))
+            elseif mode == "green_screen" then
+                alternate(Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 128, 0))
+            elseif mode == "blue_ice" then
+                alternate(Color3.fromRGB(0, 0, 255), Color3.fromRGB(173, 216, 230))
+            elseif mode == "hot_pink" then
+                alternate(Color3.fromRGB(255, 0, 102), Color3.fromRGB(255, 105, 180))
+            elseif mode == "dragon_fire" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 215, 0))
+            elseif mode == "void_walker" then
+                alternate(Color3.fromRGB(20, 0, 40), Color3.fromRGB(80, 0, 120))
+            elseif mode == "rainbow_fast" then
+                hue = (hue + (speed * 2.0 * dt)) % 1
+                applyColors(Color3.fromHSV(hue, 1, 1))
+            elseif mode == "rainbow_slow" then
+                hue = (hue + (speed * 0.1 * dt)) % 1
+                applyColors(Color3.fromHSV(hue, 1, 1))
+            elseif mode == "pastel_rainbow" then
+                hue = (hue + (speed * 0.4 * dt)) % 1
+                applyColors(Color3.fromHSV(hue, 0.35, 1))
+            elseif mode == "dark_rainbow" then
+                hue = (hue + (speed * 0.3 * dt)) % 1
+                applyColors(Color3.fromHSV(hue, 1, 0.5))
+            elseif mode == "christmas" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0))
+            elseif mode == "easter" then
+                alternate(Color3.fromRGB(255, 182, 193), Color3.fromRGB(255, 255, 153))
+            elseif mode == "valentine" then
+                alternate(Color3.fromRGB(255, 0, 80), Color3.fromRGB(255, 182, 193))
+            elseif mode == "st_patricks" then
+                alternate(Color3.fromRGB(0, 255, 0), Color3.fromRGB(255, 215, 0))
+            elseif mode == "4th_july" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 0, 255))
+            elseif mode == "thanksgiving" then
+                alternate(Color3.fromRGB(255, 140, 0), Color3.fromRGB(139, 69, 19))
+            elseif mode == "new_year" then
+                alternate(Color3.fromRGB(255, 215, 0), Color3.fromRGB(192, 192, 192))
+            elseif mode == "cyber_red" then
+                alternate(Color3.fromRGB(255, 0, 60), Color3.fromRGB(0, 0, 0))
+            elseif mode == "cyber_green" then
+                alternate(Color3.fromRGB(0, 255, 60), Color3.fromRGB(0, 0, 0))
+            elseif mode == "golden_glow" then
+                alternate(Color3.fromRGB(255, 215, 0), Color3.fromRGB(255, 255, 150))
+            elseif mode == "silver_glow" then
+                alternate(Color3.fromRGB(192, 192, 192), Color3.fromRGB(255, 255, 255))
+            elseif mode == "purple_glow" then
+                alternate(Color3.fromRGB(138, 43, 226), Color3.fromRGB(200, 150, 255))
+            elseif mode == "pink_glow" then
+                alternate(Color3.fromRGB(255, 105, 180), Color3.fromRGB(255, 200, 220))
+            elseif mode == "red_glow" then
+                alternate(Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 100, 100))
+            elseif mode == "blue_glow" then
+                alternate(Color3.fromRGB(0, 0, 255), Color3.fromRGB(100, 150, 255))
+            elseif mode == "green_glow" then
+                alternate(Color3.fromRGB(0, 255, 0), Color3.fromRGB(150, 255, 150))
+            elseif mode == "orange_glow" then
+                alternate(Color3.fromRGB(255, 140, 0), Color3.fromRGB(255, 200, 100))
+            elseif mode == "rainbow_glow" then
+                hue = (hue + (speed * 0.5 * dt)) % 1
+                local c = Color3.fromHSV(hue, 0.7, 1)
+                applyColors(Color3.new(math.min(c.R + 0.3, 1), math.min(c.G + 0.3, 1), math.min(c.B + 0.3, 1)))
+            -- ===== END NEW BIO COLORS =====
+
             elseif mode == "custom" then
                 applyColors(Settings.BioCustomColor)
             end
@@ -1302,7 +1392,7 @@ local function loadOreosHub()
     -- ============================================
     local bangConn = nil
     local orbitAngle = 0
-    local fastBangConn = nil -- Separate connection for fast mode
+    local fastBangConn = nil
 
     local function getBangTarget()
         local name = Settings.BangTarget
@@ -1318,12 +1408,10 @@ local function loadOreosHub()
         return nil
     end
 
-    -- Helper to check if ANY bang action is active
     local function isAnyBangActive()
         return Toggles.Orbit or Toggles.Headsit or Toggles.Attach or Toggles.MouthBang or Toggles.Bang or Toggles.PulseOrbit or Toggles.VerticalOrbit
     end
 
-    -- STANDARD BANG LOOP (Heartbeat-based, original behavior)
     local function startStandardBang()
         if bangConn then bangConn:Disconnect() end
         orbitAngle = 0
@@ -1397,31 +1485,28 @@ local function loadOreosHub()
         end)
     end
 
-    -- ⚡ FAST MODE BANG LOOP (RenderStepped-based, zero delay)
     local function startFastBang()
         if fastBangConn then fastBangConn:Disconnect() end
         orbitAngle = 0
-        
+
         fastBangConn = RunService.RenderStepped:Connect(function(dt)
             if not Toggles.FastModeBang or not isAnyBangActive() then return end
-            
+
             local myChar = LocalPlayer.Character
             local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
             if not myHRP or not myHu then return end
-            
-            -- Disable auto-rotate and platform stand for instant snapping
+
             myHu.AutoRotate = false
             myHu.PlatformStand = false
-            
+
             local target = getBangTarget()
             if not target or not target.Character then return end
-            
+
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
             local targetHead = target.Character:FindFirstChild("Head")
             if not targetHRP then return end
 
-            -- ⚡ ZERO-DELAY DIRECT CFRAME ASSIGNMENT FOR ALL MODES
             if Toggles.Bang then
                 local bangOffset = 1.1 + math.sin(tick() * (Settings.BangSpeed * 20)) * 0.8
                 myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, bangOffset)
@@ -1458,8 +1543,7 @@ local function loadOreosHub()
                 local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, currentY, horizontalRadius)
                 myHRP.CFrame = targetHRP.CFrame * offset
             end
-            
-            -- Nullify velocity every frame to prevent physics fighting
+
             myHRP.AssemblyLinearVelocity = Vector3.zero
             myHRP.AssemblyAngularVelocity = Vector3.zero
         end)
@@ -1470,7 +1554,6 @@ local function loadOreosHub()
         if fastBangConn then fastBangConn:Disconnect(); fastBangConn = nil end
     end
 
-    -- Unified start function that picks the right loop based on Fast Mode
     local function startBangUnified()
         if Toggles.FastModeBang then
             startFastBang()
@@ -1785,7 +1868,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- PROTECTION LOOPS (AntiVoid now uses safe Y)
+    -- PROTECTION LOOPS
     -- ============================================
     RunService.Heartbeat:Connect(function()
         if Toggles.AntiRag and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
@@ -1813,10 +1896,9 @@ local function loadOreosHub()
         end
     end)
 
-    -- Anti-Void with safe Y = -260 (skips during void grab)
     RunService.Heartbeat:Connect(function()
         if not Toggles.AntiVoid then return end
-        if voidActive then return end  -- Don't interfere with void grab
+        if voidActive then return end
         local ch = LocalPlayer.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
         if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
@@ -2206,7 +2288,7 @@ local function loadOreosHub()
         end
     })
 
-    -- BANG TAB (WITH FAST MODE INTEGRATED)
+    -- BANG TAB
     local BangTab = Window:CreateTab("Bang 🍪")
     BangTab:CreateSection("Target")
     BangTab:CreateInput({
@@ -2218,8 +2300,7 @@ local function loadOreosHub()
         CurrentValue = 1, Flag = "BangSpeed",
         Callback = function(v) Settings.BangSpeed = v end
     })
-    
-    -- ⚡ FAST MODE TOGGLE
+
     BangTab:CreateDivider()
     BangTab:CreateSection("⚡ Performance")
     BangTab:CreateToggle({
@@ -2229,7 +2310,6 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.FastModeBang = v
-            -- Restart the active bang loop with the correct engine
             if isAnyBangActive() then
                 stopBang()
                 task.wait(0.05)
@@ -2241,7 +2321,7 @@ local function loadOreosHub()
     BangTab:CreateLabel("⚡ Uses RenderStepped + direct CFrame assignment")
     BangTab:CreateLabel("✅ Eliminates all interpolation and physics delay")
     BangTab:CreateLabel("⚠️ Applies to ALL bang modes when enabled")
-    
+
     BangTab:CreateDivider()
     BangTab:CreateSection("Bang Actions")
     BangTab:CreateToggle({
@@ -2591,6 +2671,170 @@ local function loadOreosHub()
         Name = "🎃 Halloween (Orange & Purple)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "halloween" end
     })
+
+    -- ===== NEW BIO COLOR BUTTONS (added) =====
+    GlowBioTab:CreateButton({
+        Name = "☢️ Toxic Waste (Lime & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "toxic_waste" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌸 Cherry Blossom (Pink & Hot Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cherry_blossom" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "⚡ Electric Blue (Sky & Deep Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "electric_blue" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌅 Sunset Orange (Orange & Red-Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "sunset_orange" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌧️ Purple Rain (Purple & Dark Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "purple_rain" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🥇 Gold Rush (Gold & Dark Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "gold_rush" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🚨 Red Alert (Red & Dark Red)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "red_alert" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔥 Cyan Fire (Cyan & Teal)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cyan_fire" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💥 Magenta Blast (Magenta & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "magenta_blast" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌿 Mint Condition (Mint & Emerald)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "mint_condition" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌴 Vaporwave (Pink & Cyan)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "vaporwave" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🥷 Black Ops (Black & Dark Gray)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "black_ops" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔥 White Heat (White & Light Red)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "white_heat" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🟢 Green Screen (Green & Dark Green)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "green_screen" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🧊 Blue Ice (Blue & Light Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "blue_ice" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💗 Hot Pink (Hot Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "hot_pink" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🐉 Dragon Fire (Red & Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "dragon_fire" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌌 Void Walker (Dark Purple & Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "void_walker" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌈 Rainbow Fast",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "rainbow_fast" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌈 Rainbow Slow",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "rainbow_slow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌈 Pastel Rainbow",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "pastel_rainbow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🌈 Dark Rainbow",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "dark_rainbow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🎄 Christmas (Red & Green)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "christmas" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🐰 Easter (Pink & Yellow)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "easter" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "💝 Valentine (Red-Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "valentine" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🍀 St. Patrick's (Green & Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "st_patricks" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🇺🇸 4th of July (Red & Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "4th_july" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🦃 Thanksgiving (Orange & Brown)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "thanksgiving" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🎆 New Year (Gold & Silver)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "new_year" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🔴 Cyber Red (Red & Black)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cyber_red" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "🟢 Cyber Green (Green & Black)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "cyber_green" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Golden Glow (Gold & Light Gold)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "golden_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Silver Glow (Silver & White)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "silver_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Purple Glow (Purple & Light Purple)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "purple_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Pink Glow (Pink & Light Pink)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "pink_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Red Glow (Red & Light Red)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "red_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Blue Glow (Blue & Light Blue)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "blue_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Green Glow (Green & Light Green)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "green_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Orange Glow (Orange & Light Orange)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "orange_glow" end
+    })
+    GlowBioTab:CreateButton({
+        Name = "✨ Rainbow Glow (Bright Rainbow)",
+        Callback = function() PlayClickSound(); Settings.BioColorMode = "rainbow_glow" end
+    })
+    -- ===== END NEW BIO COLOR BUTTONS =====
+
     GlowBioTab:CreateButton({
         Name = "🎨 Custom Color",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "custom" end
@@ -2702,9 +2946,7 @@ local function loadOreosHub()
         end
     })
 
-    -- ============================================
-    -- SETTINGS TAB (WITH RESET PANEL INTEGRATED)
-    -- ============================================
+    -- SETTINGS TAB
     local SettingsTab = Window:CreateTab("Settings 🍪")
 
     SettingsTab:CreateSection("Server")
@@ -2937,11 +3179,11 @@ local function loadOreosHub()
     })
 
     -- ============================================
-    -- 🔄 RESET PANEL SECTION (INTEGRATED HERE)
+    -- 🔄 RESET PANEL SECTION
     -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("🔄 Reset Controls")
-    
+
     SettingsTab:CreateButton({
         Name = "💀 Instant Kill & Respawn",
         Callback = function()
@@ -2956,10 +3198,10 @@ local function loadOreosHub()
             end
         end
     })
-    
+
     SettingsTab:CreateLabel("💡 Instantly kills you to trigger a respawn")
     SettingsTab:CreateLabel("✅ Perfect for escaping grabs or unstucking")
-    
+
     SettingsTab:CreateToggle({
         Name = "🔄 Auto Reset on Death",
         CurrentValue = false,
@@ -2981,7 +3223,7 @@ local function loadOreosHub()
                         end)
                     end
                 end)
-                
+
                 if LocalPlayer.Character then
                     local hu = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                     if hu then
@@ -2995,18 +3237,18 @@ local function loadOreosHub()
                         end)
                     end
                 end
-                
+
                 Rayfield:Notify({ Title = "🔄 Auto Reset", Content = "Enabled! Will auto-respawn on death.", Duration = 3, Image = 4483362458 })
             else
-                if resetConn then 
-                    resetConn:Disconnect() 
-                    resetConn = nil 
+                if resetConn then
+                    resetConn:Disconnect()
+                    resetConn = nil
                 end
                 Rayfield:Notify({ Title = "🔄 Auto Reset", Content = "Disabled.", Duration = 3, Image = 4483362458 })
             end
         end
     })
-    
+
     SettingsTab:CreateLabel("🔄 Automatically respawns 1 second after dying")
     SettingsTab:CreateLabel("⚠️ Prevents waiting on death screens during fights")
 
