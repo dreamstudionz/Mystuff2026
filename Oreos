@@ -1,7 +1,6 @@
 -- ============================================
--- OREO'S HUB - FULL SCRIPT (FAST MODE BANG INTEGRATED)
+-- OREO'S HUB - FULL SCRIPT (GYM ATTACH INTEGRATED)
 -- ============================================
-
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -10,7 +9,6 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
-
 local resetConn = nil
 
 -- ============================================
@@ -21,7 +19,7 @@ local CONFIG = {
     Title = "Key System",
     Subtitle = "To get the key, contact me on discord @oreo.fv",
     PlaceholderText = "key",
-    WebhookURL = "https://discord.com/api/webhooks/1569271664485605458/GjLmp8RvZal-CE7tszZVjuKza4XZBrlmYoc_OscpV2vl1qcHP_kFukOeRijLT-S4FiMo",
+    WebhookURL = "https://discord.com/api/webhooks/1554461459675619404/a9RAIWPd_vXviAhh1x1jwwf4VTVZ_B6zfKCAMSO1tNZ9-ondxldMFJe8VgFpkYllvr3E",
     LogEnabled = true,
 }
 
@@ -193,6 +191,8 @@ local function loadOreosHub()
         AutoTarget = false,
         TpGrabLoop = false,
         FastModeBang = false,
+        MaxInvertedDive = false,
+        GymAttach = false, -- ✅ ADDED: Gym Roof Attach Toggle
     }
     local Settings = {
         VoidY = -200,
@@ -222,11 +222,12 @@ local function loadOreosHub()
         GrabDistance = 3,
         AutoTargetRange = 50,
         SpinSpeed = 30,
-        GymPosition = Vector3.new(-107.13987731933594, 4.336757183074951, 580.064208984375),
+        GymPosition = Vector3.new(-95.44940185546875, 3.285350799560547, 579.0271606445312), -- ✅ UPDATED FROM CONSOLE CAPTURE
         AutoExitHPThreshold = 40,
         AutoExitReturnHP = 60,
         AutoExitSkyHeight = 500,
         TargetUsername = "",
+        GymRoofHeight = 15, -- ✅ ADDED: Height offset for roof attach
     }
 
     -- ============================================
@@ -414,8 +415,6 @@ local function loadOreosHub()
                 alternate(Color3.fromRGB(0, 150, 0), Color3.fromRGB(255, 120, 0))
             elseif mode == "halloween" then
                 alternate(Color3.fromRGB(255, 100, 0), Color3.fromRGB(80, 0, 120))
-
-            -- ===== NEW BIO COLORS (added) =====
             elseif mode == "toxic_waste" then
                 alternate(Color3.fromRGB(127, 255, 0), Color3.fromRGB(75, 0, 130))
             elseif mode == "cherry_blossom" then
@@ -502,8 +501,6 @@ local function loadOreosHub()
                 hue = (hue + (speed * 0.5 * dt)) % 1
                 local c = Color3.fromHSV(hue, 0.7, 1)
                 applyColors(Color3.new(math.min(c.R + 0.3, 1), math.min(c.G + 0.3, 1), math.min(c.B + 0.3, 1)))
-            -- ===== END NEW BIO COLORS =====
-
             elseif mode == "custom" then
                 applyColors(Settings.BioCustomColor)
             end
@@ -1388,7 +1385,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- BANG SYSTEM WITH FAST MODE
+    -- BANG SYSTEM WITH FAST MODE (UNCHANGED)
     -- ============================================
     local bangConn = nil
     local orbitAngle = 0
@@ -1488,21 +1485,21 @@ local function loadOreosHub()
     local function startFastBang()
         if fastBangConn then fastBangConn:Disconnect() end
         orbitAngle = 0
-
+        
         fastBangConn = RunService.RenderStepped:Connect(function(dt)
             if not Toggles.FastModeBang or not isAnyBangActive() then return end
-
+            
             local myChar = LocalPlayer.Character
             local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
             if not myHRP or not myHu then return end
-
+            
             myHu.AutoRotate = false
             myHu.PlatformStand = false
-
+            
             local target = getBangTarget()
             if not target or not target.Character then return end
-
+            
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
             local targetHead = target.Character:FindFirstChild("Head")
             if not targetHRP then return end
@@ -1543,7 +1540,7 @@ local function loadOreosHub()
                 local offset = CFrame.Angles(0, orbitAngle, 0) * CFrame.new(0, currentY, horizontalRadius)
                 myHRP.CFrame = targetHRP.CFrame * offset
             end
-
+            
             myHRP.AssemblyLinearVelocity = Vector3.zero
             myHRP.AssemblyAngularVelocity = Vector3.zero
         end)
@@ -1559,6 +1556,242 @@ local function loadOreosHub()
             startFastBang()
         else
             startStandardBang()
+        end
+    end
+
+    -- ============================================
+    -- 🦸‍♂️ MAXIMUM INVERTED DIVE SUPERMAN POSE (INDEPENDENT)
+    -- ============================================
+    local maxInvertedConn = nil
+    local invertedAnimateScript = nil
+    local invertedAnimateDisabled = false
+
+    local function startMaxInvertedDiveLoop()
+        if maxInvertedConn then maxInvertedConn:Disconnect() end
+        
+        maxInvertedConn = RunService.RenderStepped:Connect(function(dt)
+            if not Toggles.MaxInvertedDive then return end
+            
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+            
+            if not myHRP or not myHu then return end
+            
+            -- ✅ INDEPENDENT ANIMATE DISABLE (doesn't interfere with Bang system)
+            if not invertedAnimateDisabled then
+                local animate = myChar:FindFirstChild("Animate")
+                if animate and animate:IsA("LocalScript") then
+                    if not invertedAnimateScript then invertedAnimateScript = animate:Clone() end
+                    animate.Disabled = true
+                    invertedAnimateDisabled = true
+                end
+            end
+            
+            myHu.AutoRotate = false
+            myHu.PlatformStand = false
+            myHu:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+            myHu:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+            
+            local target = getBangTarget() -- ✅ Reuses existing target finder
+            if not target or not target.Character then return end
+            
+            local targetHead = target.Character:FindFirstChild("Head")
+            if not targetHead then return end
+            
+            -- 🦸‍♂️ BASE FLIGHT CFRAME CALCULATION
+            local heightOffset = 14
+            local tiltAngle = math.rad(10)
+            
+            local pos = targetHead.Position + (targetHead.CFrame.UpVector * heightOffset)
+            local lookDir = targetHead.CFrame.LookVector
+            local upDir = targetHead.CFrame.UpVector
+            
+            local tiltedUp = upDir * math.cos(tiltAngle) - lookDir * math.sin(tiltAngle)
+            local tiltedLook = lookDir * math.cos(tiltAngle) + upDir * math.sin(tiltAngle)
+            
+            local baseCFrame = CFrame.fromMatrix(pos, 
+                targetHead.CFrame.RightVector, 
+                tiltedUp, 
+                -tiltedLook
+            )
+            
+            myHRP.CFrame = baseCFrame
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+            
+            -- 🦸‍♂️ MANUAL LIMB OVERRIDES AT MAX SAFE LIMIT (179°)
+            local upperTorso = myChar:FindFirstChild("UpperTorso")
+            local lowerTorso = myChar:FindFirstChild("LowerTorso")
+            local leftArm = myChar:FindFirstChild("LeftUpperArm")
+            local rightArm = myChar:FindFirstChild("RightUpperArm")
+            local leftLeg = myChar:FindFirstChild("LeftUpperLeg")
+            local rightLeg = myChar:FindFirstChild("RightUpperLeg")
+            
+            if upperTorso and lowerTorso then
+                local waist = myChar:FindFirstChild("Waist")
+                if waist then
+                    local torsoTilt = math.rad(179) 
+                    waist.C0 = CFrame.Angles(torsoTilt, 0, 0)
+                end
+            end
+            
+            if leftArm and rightArm then
+                local lShoulder = myChar:FindFirstChild("LeftShoulder")
+                local rShoulder = myChar:FindFirstChild("RightShoulder")
+                
+                if lShoulder then lShoulder.C0 = CFrame.Angles(math.rad(179), 0, math.rad(15)) end
+                if rShoulder then rShoulder.C0 = CFrame.Angles(math.rad(179), 0, math.rad(-15)) end
+                
+                local lElbow = myChar:FindFirstChild("LeftElbow")
+                local rElbow = myChar:FindFirstChild("RightElbow")
+                if lElbow then lElbow.C0 = CFrame.Angles(0, 0, 0) end
+                if rElbow then rElbow.C0 = CFrame.Angles(0, 0, 0) end
+            end
+            
+            if leftLeg and rightLeg then
+                local lHip = myChar:FindFirstChild("LeftHip")
+                local rHip = myChar:FindFirstChild("RightHip")
+                
+                if lHip then lHip.C0 = CFrame.Angles(math.rad(-179), 0, 0) end
+                if rHip then rHip.C0 = CFrame.Angles(math.rad(-179), 0, 0) end
+                
+                local lKnee = myChar:FindFirstChild("LeftKnee")
+                local rKnee = myChar:FindFirstChild("RightKnee")
+                if lKnee then lKnee.C0 = CFrame.Angles(0, 0, 0) end
+                if rKnee then rKnee.C0 = CFrame.Angles(0, 0, 0) end
+            end
+        end)
+    end
+
+    -- Independent cleanup function that doesn't touch Bang connections
+    local function stopMaxInvertedDive()
+        if maxInvertedConn then maxInvertedConn:Disconnect(); maxInvertedConn = nil end
+        -- Restore animate script independently
+        if invertedAnimateDisabled then
+            local char = LocalPlayer.Character
+            if char then
+                local animate = char:FindFirstChild("Animate")
+                if not animate and invertedAnimateScript then
+                    local newAnimate = invertedAnimateScript:Clone()
+                    newAnimate.Parent = char
+                    newAnimate.Disabled = false
+                elseif animate then
+                    animate.Disabled = false
+                end
+            end
+            invertedAnimateDisabled = false
+            invertedAnimateScript = nil
+        end
+    end
+
+    -- ============================================
+    -- 🏋️ GYM ROOF ATTACH SYSTEM (FIXED POSITION)
+    -- ============================================
+    local gymAttachConn = nil
+    local gymAnimateScript = nil
+    local gymAnimateDisabled = false
+
+    local function startGymAttachLoop()
+        if gymAttachConn then gymAttachConn:Disconnect() end
+        
+        gymAttachConn = RunService.RenderStepped:Connect(function(dt)
+            if not Toggles.GymAttach then return end
+            
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+            
+            if not myHRP or not myHu then return end
+            
+            -- ✅ INDEPENDENT ANIMATE DISABLE FOR GYM ATTACH
+            if not gymAnimateDisabled then
+                local animate = myChar:FindFirstChild("Animate")
+                if animate and animate:IsA("LocalScript") then
+                    if not gymAnimateScript then gymAnimateScript = animate:Clone() end
+                    animate.Disabled = true
+                    gymAnimateDisabled = true
+                end
+            end
+            
+            myHu.AutoRotate = false
+            myHu.PlatformStand = false
+            myHu:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+            myHu:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+            
+            -- 🏋️ FIXED GYM ROOF POSITION
+            local roofPos = Settings.GymPosition + Vector3.new(0, Settings.GymRoofHeight, 0)
+            
+            -- Face downward toward gym floor while hanging from roof
+            local lookDir = Vector3.new(0, -1, 0)
+            local upDir = Vector3.new(0, 0, 1)
+            local rightDir = Vector3.new(1, 0, 0)
+            
+            local baseCFrame = CFrame.fromMatrix(roofPos, rightDir, upDir, -lookDir)
+            
+            myHRP.CFrame = baseCFrame
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+            
+            -- 🏋️ LIMB ORIENTATION FOR ROOF HANGING
+            local upperTorso = myChar:FindFirstChild("UpperTorso")
+            local lowerTorso = myChar:FindFirstChild("LowerTorso")
+            local leftArm = myChar:FindFirstChild("LeftUpperArm")
+            local rightArm = myChar:FindFirstChild("RightUpperArm")
+            local leftLeg = myChar:FindFirstChild("LeftUpperLeg")
+            local rightLeg = myChar:FindFirstChild("RightUpperLeg")
+            
+            if upperTorso and lowerTorso then
+                local waist = myChar:FindFirstChild("Waist")
+                if waist then
+                    waist.C0 = CFrame.Angles(math.rad(-170), 0, 0)
+                end
+            end
+            
+            if leftArm and rightArm then
+                local lShoulder = myChar:FindFirstChild("LeftShoulder")
+                local rShoulder = myChar:FindFirstChild("RightShoulder")
+                
+                if lShoulder then lShoulder.C0 = CFrame.Angles(math.rad(-170), 0, math.rad(15)) end
+                if rShoulder then rShoulder.C0 = CFrame.Angles(math.rad(-170), 0, math.rad(-15)) end
+                
+                local lElbow = myChar:FindFirstChild("LeftElbow")
+                local rElbow = myChar:FindFirstChild("RightElbow")
+                if lElbow then lElbow.C0 = CFrame.Angles(0, 0, 0) end
+                if rElbow then rElbow.C0 = CFrame.Angles(0, 0, 0) end
+            end
+            
+            if leftLeg and rightLeg then
+                local lHip = myChar:FindFirstChild("LeftHip")
+                local rHip = myChar:FindFirstChild("RightHip")
+                
+                if lHip then lHip.C0 = CFrame.Angles(math.rad(170), 0, 0) end
+                if rHip then rHip.C0 = CFrame.Angles(math.rad(170), 0, 0) end
+                
+                local lKnee = myChar:FindFirstChild("LeftKnee")
+                local rKnee = myChar:FindFirstChild("RightKnee")
+                if lKnee then lKnee.C0 = CFrame.Angles(0, 0, 0) end
+                if rKnee then rKnee.C0 = CFrame.Angles(0, 0, 0) end
+            end
+        end)
+    end
+
+    local function stopGymAttach()
+        if gymAttachConn then gymAttachConn:Disconnect(); gymAttachConn = nil end
+        if gymAnimateDisabled then
+            local char = LocalPlayer.Character
+            if char then
+                local animate = char:FindFirstChild("Animate")
+                if not animate and gymAnimateScript then
+                    local newAnimate = gymAnimateScript:Clone()
+                    newAnimate.Parent = char
+                    newAnimate.Disabled = false
+                elseif animate then
+                    animate.Disabled = false
+                end
+            end
+            gymAnimateDisabled = false
+            gymAnimateScript = nil
         end
     end
 
@@ -1868,7 +2101,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- PROTECTION LOOPS
+    -- PROTECTION LOOPS (AntiVoid now uses safe Y)
     -- ============================================
     RunService.Heartbeat:Connect(function()
         if Toggles.AntiRag and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
@@ -1896,9 +2129,10 @@ local function loadOreosHub()
         end
     end)
 
+    -- Anti-Void with safe Y = -260 (skips during void grab)
     RunService.Heartbeat:Connect(function()
         if not Toggles.AntiVoid then return end
-        if voidActive then return end
+        if voidActive then return end  -- Don't interfere with void grab
         local ch = LocalPlayer.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
         if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
@@ -1934,6 +2168,49 @@ local function loadOreosHub()
     HomeTab:CreateLabel("    🍪 🍪 🍪")
     HomeTab:CreateLabel("  🍪 🍪 🍪 🍪")
     HomeTab:CreateLabel("🍪 🍪 🍪 🍪 🍪")
+
+    -- ✅ NEW: GYM ATTACH TAB (PLACED BEFORE GOD MODE)
+    local GymAttachTab = Window:CreateTab("Gym Attach 🏋️")
+    GymAttachTab:CreateSection("🏋️ Gym Roof Attachment")
+    GymAttachTab:CreateLabel("⚠️ Fixed position on gym roof - no target needed")
+    GymAttachTab:CreateLabel("✅ Uses captured gym coordinates + height offset")
+    
+    GymAttachTab:CreateToggle({
+        Name = "🏋️ Enable Gym Roof Attach",
+        CurrentValue = false,
+        Flag = "GymAttachToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.GymAttach = v
+            if v then 
+                startGymAttachLoop() 
+            else 
+                stopGymAttach() 
+            end
+            sendWebhookLog("🏋️ Gym Attach", (v and "**Enabled** Roof Attach" or "**Disabled** Roof Attach"), v and 5763719 or 15548997)
+        end
+    })
+    
+    GymAttachTab:CreateSlider({
+        Name = "Roof Height Offset",
+        Range = {5, 30},
+        Increment = 1,
+        Suffix = " studs",
+        CurrentValue = 15,
+        Flag = "GymRoofHeight",
+        Callback = function(v)
+            Settings.GymRoofHeight = v
+            -- Restart loop to apply new height immediately
+            if Toggles.GymAttach then
+                stopGymAttach()
+                task.wait(0.05)
+                startGymAttachLoop()
+            end
+        end
+    })
+    
+    GymAttachTab:CreateLabel("💡 Adjust height if clipping through roof or floating too high")
+    GymAttachTab:CreateLabel("📍 Position locked to: " .. tostring(Settings.GymPosition))
 
     -- GOD MODE TAB
     local GodModeTab = Window:CreateTab("God Mode 🥊")
@@ -2288,7 +2565,7 @@ local function loadOreosHub()
         end
     })
 
-    -- BANG TAB
+    -- BANG TAB (UNCHANGED)
     local BangTab = Window:CreateTab("Bang 🍪")
     BangTab:CreateSection("Target")
     BangTab:CreateInput({
@@ -2300,7 +2577,6 @@ local function loadOreosHub()
         CurrentValue = 1, Flag = "BangSpeed",
         Callback = function(v) Settings.BangSpeed = v end
     })
-
     BangTab:CreateDivider()
     BangTab:CreateSection("⚡ Performance")
     BangTab:CreateToggle({
@@ -2321,7 +2597,6 @@ local function loadOreosHub()
     BangTab:CreateLabel("⚡ Uses RenderStepped + direct CFrame assignment")
     BangTab:CreateLabel("✅ Eliminates all interpolation and physics delay")
     BangTab:CreateLabel("⚠️ Applies to ALL bang modes when enabled")
-
     BangTab:CreateDivider()
     BangTab:CreateSection("Bang Actions")
     BangTab:CreateToggle({
@@ -2428,6 +2703,27 @@ local function loadOreosHub()
             sendWebhookLog("📎 Attach", (v and "**Enabled** Attach" or "**Disabled** Attach"), v and 5763719 or 15548997)
         end
     })
+
+    -- ✅ SPECIAL POSES SECTION (MAX INVERTED DIVE)
+    BangTab:CreateDivider()
+    BangTab:CreateSection("🦸‍♂️ Special Poses")
+    BangTab:CreateToggle({
+        Name = "🦸‍♂️ Max Inverted Dive (179°)",
+        CurrentValue = false,
+        Flag = "MaxInvertedDiveToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.MaxInvertedDive = v
+            if v then 
+                startMaxInvertedDiveLoop() 
+            else 
+                stopMaxInvertedDive() 
+            end
+            sendWebhookLog("🦸‍♂️ Max Inverted Dive", (v and "**Enabled** 179° Dive" or "**Disabled** 179° Dive"), v and 5763719 or 15548997)
+        end
+    })
+    BangTab:CreateLabel("⚠️ Uses separate animate bypass - won't interfere with Bang modes")
+    BangTab:CreateLabel("✅ 179° tilt + 14 stud height above target's head")
 
     -- GLOWING BIO TAB
     local GlowBioTab = Window:CreateTab("Glowing Bio 🍪")
@@ -2671,8 +2967,6 @@ local function loadOreosHub()
         Name = "🎃 Halloween (Orange & Purple)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "halloween" end
     })
-
-    -- ===== NEW BIO COLOR BUTTONS (added) =====
     GlowBioTab:CreateButton({
         Name = "☢️ Toxic Waste (Lime & Purple)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "toxic_waste" end
@@ -2833,8 +3127,6 @@ local function loadOreosHub()
         Name = "✨ Rainbow Glow (Bright Rainbow)",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "rainbow_glow" end
     })
-    -- ===== END NEW BIO COLOR BUTTONS =====
-
     GlowBioTab:CreateButton({
         Name = "🎨 Custom Color",
         Callback = function() PlayClickSound(); Settings.BioColorMode = "custom" end
@@ -3183,7 +3475,7 @@ local function loadOreosHub()
     -- ============================================
     SettingsTab:CreateDivider()
     SettingsTab:CreateSection("🔄 Reset Controls")
-
+    
     SettingsTab:CreateButton({
         Name = "💀 Instant Kill & Respawn",
         Callback = function()
@@ -3198,10 +3490,10 @@ local function loadOreosHub()
             end
         end
     })
-
+    
     SettingsTab:CreateLabel("💡 Instantly kills you to trigger a respawn")
     SettingsTab:CreateLabel("✅ Perfect for escaping grabs or unstucking")
-
+    
     SettingsTab:CreateToggle({
         Name = "🔄 Auto Reset on Death",
         CurrentValue = false,
@@ -3223,7 +3515,7 @@ local function loadOreosHub()
                         end)
                     end
                 end)
-
+                
                 if LocalPlayer.Character then
                     local hu = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                     if hu then
@@ -3237,18 +3529,18 @@ local function loadOreosHub()
                         end)
                     end
                 end
-
+                
                 Rayfield:Notify({ Title = "🔄 Auto Reset", Content = "Enabled! Will auto-respawn on death.", Duration = 3, Image = 4483362458 })
             else
-                if resetConn then
-                    resetConn:Disconnect()
-                    resetConn = nil
+                if resetConn then 
+                    resetConn:Disconnect() 
+                    resetConn = nil 
                 end
                 Rayfield:Notify({ Title = "🔄 Auto Reset", Content = "Disabled.", Duration = 3, Image = 4483362458 })
             end
         end
     })
-
+    
     SettingsTab:CreateLabel("🔄 Automatically respawns 1 second after dying")
     SettingsTab:CreateLabel("⚠️ Prevents waiting on death screens during fights")
 
@@ -3299,7 +3591,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Fast Mode Bang + Reset Panel"
+    updateTag.Text = "🆕 Gym Attach + Fast Mode Bang + Reset Panel"
     updateTag.TextColor3 = Color3.fromRGB(180, 130, 255)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
