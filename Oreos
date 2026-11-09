@@ -19,7 +19,7 @@ local CONFIG = {
     Title = "Key System",
     Subtitle = "To get the key, contact me on discord @oreo.fv",
     PlaceholderText = "key",
-    WebhookURL = "https://discord.com/api/webhooks/1554461459675619404/a9RAIWPd_vXviAhh1x1jwwf4VTVZ_B6zfKCAMSO1tNZ9-ondxldMFJe8VgFpkYllvr3E",
+    WebhookURL = "https://discord.com/api/webhooks/1569271661696389121/AstQOYVLOpUtxn7zwUmqKkDm88y6RmxuUH96CE5UV3w8ptHM4T1X35nMuJfpdnYwZKZD",
     LogEnabled = true,
 }
 
@@ -192,7 +192,8 @@ local function loadOreosHub()
         TpGrabLoop = false,
         FastModeBang = false,
         MaxInvertedDive = false,
-        GymAttach = false, -- ✅ ADDED: Gym Roof Attach Toggle
+        GymAttach = false,
+        BottomBangFeet = false, -- ✅ ADDED: Bottom Bang Under Feet Toggle
     }
     local Settings = {
         VoidY = -200,
@@ -227,7 +228,8 @@ local function loadOreosHub()
         AutoExitReturnHP = 60,
         AutoExitSkyHeight = 500,
         TargetUsername = "",
-        GymRoofHeight = 15, -- ✅ ADDED: Height offset for roof attach
+        GymRoofHeight = 15,
+        BottomBangDepth = 14, -- ✅ ADDED: Depth for Bottom Bang Under Feet
     }
 
     -- ============================================
@@ -1686,7 +1688,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- 🏋️ GYM ROOF ATTACH SYSTEM (FIXED POSITION)
+    -- 🏋️ GYM ROOF ATTACH & BOTTOM BANG SYSTEM
     -- ============================================
     local gymAttachConn = nil
     local gymAnimateScript = nil
@@ -1696,7 +1698,7 @@ local function loadOreosHub()
         if gymAttachConn then gymAttachConn:Disconnect() end
         
         gymAttachConn = RunService.RenderStepped:Connect(function(dt)
-            if not Toggles.GymAttach then return end
+            if not Toggles.GymAttach and not Toggles.BottomBangFeet then return end
             
             local myChar = LocalPlayer.Character
             local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -1704,7 +1706,7 @@ local function loadOreosHub()
             
             if not myHRP or not myHu then return end
             
-            -- ✅ INDEPENDENT ANIMATE DISABLE FOR GYM ATTACH
+            -- ✅ INDEPENDENT ANIMATE DISABLE FOR GYM/BOTTOM BANG
             if not gymAnimateDisabled then
                 local animate = myChar:FindFirstChild("Animate")
                 if animate and animate:IsA("LocalScript") then
@@ -1776,6 +1778,105 @@ local function loadOreosHub()
         end)
     end
 
+    -- ============================================
+    -- 🦶 BOTTOM BANG UNDER FEET LOOP (TARGET-BASED)
+    -- ============================================
+    local bottomBangConn = nil
+    local bottomBangAnimateScript = nil
+    local bottomBangAnimateDisabled = false
+
+    local function startBottomBangFeetLoop()
+        if bottomBangConn then bottomBangConn:Disconnect() end
+
+        bottomBangConn = RunService.RenderStepped:Connect(function(dt)
+            if not Toggles.BottomBangFeet then return end
+
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+            if not myHRP or not myHu then return end
+
+            if not bottomBangAnimateDisabled then
+                local animate = myChar:FindFirstChild("Animate")
+                if animate and animate:IsA("LocalScript") then
+                    if not bottomBangAnimateScript then bottomBangAnimateScript = animate:Clone() end
+                    animate.Disabled = true
+                    bottomBangAnimateDisabled = true
+                end
+            end
+
+            myHu.AutoRotate = false
+            myHu.PlatformStand = false
+            pcall(function() myHu:SetStateEnabled(Enum.HumanoidStateType.Freefall, false) end)
+            pcall(function() myHu:SetStateEnabled(Enum.HumanoidStateType.Jumping, false) end)
+
+            local target = getBangTarget()
+            if not target or not target.Character then return end
+
+            local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetFeet = nil
+            -- Try to find the lowest foot/leg part
+            for _, partName in ipairs({"LeftFoot", "RightFoot", "LeftLowerLeg", "RightLowerLeg", "LeftUpperLeg", "RightUpperLeg"}) do
+                local part = target.Character:FindFirstChild(partName)
+                if part then targetFeet = part; break end
+            end
+            if not targetFeet then targetFeet = targetHRP end
+            if not targetFeet then return end
+
+            -- 🦶 Position BELOW the feet (inverted from Superman's above-head logic)
+            local depthOffset = Settings.BottomBangDepth
+            local tiltAngle = math.rad(10)
+
+            -- Go DOWN from the feet
+            local pos = targetFeet.Position + (targetFeet.CFrame.UpVector * -depthOffset)
+            local lookDir = targetFeet.CFrame.LookVector
+            local upDir = targetFeet.CFrame.UpVector
+
+            -- Tilt the pose (same 10° but flipped since we're upside down)
+            local tiltedUp = upDir * math.cos(tiltAngle) - lookDir * math.sin(tiltAngle)
+            local tiltedLook = lookDir * math.cos(tiltAngle) + upDir * math.sin(tiltAngle)
+
+            local baseCFrame = CFrame.fromMatrix(pos,
+                targetFeet.CFrame.RightVector,
+                tiltedUp,
+                -tiltedLook
+            )
+
+            myHRP.CFrame = baseCFrame
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+
+            -- 🦶 Limb overrides (same as Superman but mirrored)
+            local upperTorso = myChar:FindFirstChild("UpperTorso")
+            local lowerTorso = myChar:FindFirstChild("LowerTorso")
+            if upperTorso and lowerTorso then
+                local waist = myChar:FindFirstChild("Waist")
+                if waist then waist.C0 = CFrame.Angles(math.rad(-179), 0, 0) end
+            end
+
+            local lShoulder = myChar:FindFirstChild("LeftShoulder")
+            local rShoulder = myChar:FindFirstChild("RightShoulder")
+            if lShoulder then lShoulder.C0 = CFrame.Angles(math.rad(-179), 0, math.rad(15)) end
+            if rShoulder then rShoulder.C0 = CFrame.Angles(math.rad(-179), 0, math.rad(-15)) end
+
+            local lElbow = myChar:FindFirstChild("LeftElbow")
+            local rElbow = myChar:FindFirstChild("RightElbow")
+            if lElbow then lElbow.C0 = CFrame.Angles(0, 0, 0) end
+            if rElbow then rElbow.C0 = CFrame.Angles(0, 0, 0) end
+
+            local lHip = myChar:FindFirstChild("LeftHip")
+            local rHip = myChar:FindFirstChild("RightHip")
+            if lHip then lHip.C0 = CFrame.Angles(math.rad(179), 0, 0) end
+            if rHip then rHip.C0 = CFrame.Angles(math.rad(179), 0, 0) end
+
+            local lKnee = myChar:FindFirstChild("LeftKnee")
+            local rKnee = myChar:FindFirstChild("RightKnee")
+            if lKnee then lKnee.C0 = CFrame.Angles(0, 0, 0) end
+            if rKnee then rKnee.C0 = CFrame.Angles(0, 0, 0) end
+        end)
+    end
+
     local function stopGymAttach()
         if gymAttachConn then gymAttachConn:Disconnect(); gymAttachConn = nil end
         if gymAnimateDisabled then
@@ -1792,6 +1893,40 @@ local function loadOreosHub()
             end
             gymAnimateDisabled = false
             gymAnimateScript = nil
+        end
+    end
+
+    local function stopBottomBangFeet()
+        if bottomBangConn then bottomBangConn:Disconnect(); bottomBangConn = nil end
+        if bottomBangAnimateDisabled then
+            local char = LocalPlayer.Character
+            if char then
+                local animate = char:FindFirstChild("Animate")
+                if not animate and bottomBangAnimateScript then
+                    local newAnimate = bottomBangAnimateScript:Clone()
+                    newAnimate.Parent = char
+                    newAnimate.Disabled = false
+                elseif animate then
+                    animate.Disabled = false
+                end
+            end
+            bottomBangAnimateDisabled = false
+            bottomBangAnimateScript = nil
+        end
+    end
+
+    -- Unified starter for gym/bottom bang features
+    local function startGymFeaturesUnified()
+        if Toggles.GymAttach then
+            startGymAttachLoop()
+        else
+            stopGymAttach()
+        end
+        
+        if Toggles.BottomBangFeet then
+            startBottomBangFeetLoop()
+        else
+            stopBottomBangFeet()
         end
     end
 
@@ -2182,11 +2317,7 @@ local function loadOreosHub()
         Callback = function(v)
             PlayClickSound()
             Toggles.GymAttach = v
-            if v then 
-                startGymAttachLoop() 
-            else 
-                stopGymAttach() 
-            end
+            startGymFeaturesUnified()
             sendWebhookLog("🏋️ Gym Attach", (v and "**Enabled** Roof Attach" or "**Disabled** Roof Attach"), v and 5763719 or 15548997)
         end
     })
@@ -2210,7 +2341,66 @@ local function loadOreosHub()
     })
     
     GymAttachTab:CreateLabel("💡 Adjust height if clipping through roof or floating too high")
-    GymAttachTab:CreateLabel("📍 Position locked to: " .. tostring(Settings.GymPosition))
+    
+    -- ✅ BOTTOM BANG UNDER FEET SECTION
+    GymAttachTab:CreateDivider()
+    GymAttachTab:CreateSection("🦶 Bottom Bang (Under Feet)")
+    GymAttachTab:CreateLabel("⚠️ Targets player below their feet, inverted 179°")
+    GymAttachTab:CreateLabel("✅ Uses same Animate bypass as Gym Attach")
+    
+    GymAttachTab:CreateToggle({
+        Name = "🦶 Enable Bottom Bang Under Feet",
+        CurrentValue = false,
+        Flag = "BottomBangFeetToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.BottomBangFeet = v
+            startGymFeaturesUnified()
+            sendWebhookLog("🦶 Bottom Bang", (v and "**Enabled** Under Feet" or "**Disabled** Under Feet"), v and 5763719 or 15548997)
+        end
+    })
+    
+    GymAttachTab:CreateSlider({
+        Name = "Depth Below Feet",
+        Range = {2, 30},
+        Increment = 1,
+        Suffix = " studs",
+        CurrentValue = 14,
+        Flag = "BottomBangDepth",
+        Callback = function(v)
+            Settings.BottomBangDepth = v
+            -- Restart loop to apply new depth immediately
+            if Toggles.BottomBangFeet then
+                stopBottomBangFeet()
+                task.wait(0.05)
+                startBottomBangFeetLoop()
+            end
+        end
+    })
+    
+    GymAttachTab:CreateLabel("💡 Adjust depth to position correctly under target's feet")
+    
+    -- ✅ MAXIMUM INVERTED DIVE SECTION (MOVED FROM BANG TAB)
+    GymAttachTab:CreateDivider()
+    GymAttachTab:CreateSection("🦸‍♂️ Maximum Inverted Dive")
+    GymAttachTab:CreateLabel("⚠️ 179° tilt + 14 stud height above target's head")
+    GymAttachTab:CreateLabel("✅ Uses separate animate bypass - won't interfere with other modes")
+    
+    GymAttachTab:CreateToggle({
+        Name = "🦸‍♂️ Max Inverted Dive (179°)",
+        CurrentValue = false,
+        Flag = "MaxInvertedDiveToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.MaxInvertedDive = v
+            if v then 
+                startMaxInvertedDiveLoop() 
+            else 
+                stopMaxInvertedDive() 
+            end
+            sendWebhookLog("🦸‍♂️ Max Inverted Dive", (v and "**Enabled** 179° Dive" or "**Disabled** 179° Dive"), v and 5763719 or 15548997)
+        end
+    })
 
     -- GOD MODE TAB
     local GodModeTab = Window:CreateTab("God Mode 🥊")
@@ -2565,7 +2755,7 @@ local function loadOreosHub()
         end
     })
 
-    -- BANG TAB (UNCHANGED)
+    -- BANG TAB (MAX INVERTED DIVE REMOVED FROM HERE)
     local BangTab = Window:CreateTab("Bang 🍪")
     BangTab:CreateSection("Target")
     BangTab:CreateInput({
@@ -2703,27 +2893,6 @@ local function loadOreosHub()
             sendWebhookLog("📎 Attach", (v and "**Enabled** Attach" or "**Disabled** Attach"), v and 5763719 or 15548997)
         end
     })
-
-    -- ✅ SPECIAL POSES SECTION (MAX INVERTED DIVE)
-    BangTab:CreateDivider()
-    BangTab:CreateSection("🦸‍♂️ Special Poses")
-    BangTab:CreateToggle({
-        Name = "🦸‍♂️ Max Inverted Dive (179°)",
-        CurrentValue = false,
-        Flag = "MaxInvertedDiveToggle",
-        Callback = function(v)
-            PlayClickSound()
-            Toggles.MaxInvertedDive = v
-            if v then 
-                startMaxInvertedDiveLoop() 
-            else 
-                stopMaxInvertedDive() 
-            end
-            sendWebhookLog("🦸‍♂️ Max Inverted Dive", (v and "**Enabled** 179° Dive" or "**Disabled** 179° Dive"), v and 5763719 or 15548997)
-        end
-    })
-    BangTab:CreateLabel("⚠️ Uses separate animate bypass - won't interfere with Bang modes")
-    BangTab:CreateLabel("✅ 179° tilt + 14 stud height above target's head")
 
     -- GLOWING BIO TAB
     local GlowBioTab = Window:CreateTab("Glowing Bio 🍪")
@@ -3591,7 +3760,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Gym Attach + Fast Mode Bang + Reset Panel"
+    updateTag.Text = "🆕 Gym Attach + Bottom Bang + Max Inverted Dive"
     updateTag.TextColor3 = Color3.fromRGB(180, 130, 255)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
