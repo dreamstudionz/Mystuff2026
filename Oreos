@@ -193,7 +193,7 @@ local function loadOreosHub()
         FastModeBang = false,
         MaxInvertedDive = false,
         GymAttach = false,
-        BottomBangFeet = false, -- ✅ ADDED: Bottom Bang Under Feet Toggle
+        BottomBangFeet = false,
     }
     local Settings = {
         VoidY = -200,
@@ -223,13 +223,15 @@ local function loadOreosHub()
         GrabDistance = 3,
         AutoTargetRange = 50,
         SpinSpeed = 30,
-        GymPosition = Vector3.new(-95.44940185546875, 3.285350799560547, 579.0271606445312), -- ✅ UPDATED FROM CONSOLE CAPTURE
+        GymPosition = Vector3.new(-95.44940185546875, 3.285350799560547, 579.0271606445312),
         AutoExitHPThreshold = 40,
         AutoExitReturnHP = 60,
         AutoExitSkyHeight = 500,
         TargetUsername = "",
         GymRoofHeight = 15,
-        BottomBangDepth = 14, -- ✅ ADDED: Depth for Bottom Bang Under Feet
+        BottomBangDepth = 14,
+        GymAttachTarget = "", -- ✅ SHARED TARGET FOR GYM ATTACH FEATURES
+        MaxInvertedDiveHeight = 14, -- ✅ ADJUSTABLE HEIGHT FOR MAX INVERTED DIVE
     }
 
     -- ============================================
@@ -1580,7 +1582,6 @@ local function loadOreosHub()
             
             if not myHRP or not myHu then return end
             
-            -- ✅ INDEPENDENT ANIMATE DISABLE (doesn't interfere with Bang system)
             if not invertedAnimateDisabled then
                 local animate = myChar:FindFirstChild("Animate")
                 if animate and animate:IsA("LocalScript") then
@@ -1595,14 +1596,26 @@ local function loadOreosHub()
             myHu:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
             myHu:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
             
-            local target = getBangTarget() -- ✅ Reuses existing target finder
+            -- ✅ USES SHARED GYM ATTACH TARGET INPUT
+            local targetName = Settings.GymAttachTarget
+            if targetName == "" then return end
+            local lowerName = targetName:lower()
+            local target = nil
+            for _, p in Players:GetPlayers() do
+                if p ~= LocalPlayer then
+                    if p.Name:lower():sub(1, #lowerName) == lowerName or p.DisplayName:lower():sub(1, #lowerName) == lowerName then
+                        target = p
+                        break
+                    end
+                end
+            end
             if not target or not target.Character then return end
             
             local targetHead = target.Character:FindFirstChild("Head")
             if not targetHead then return end
             
-            -- 🦸‍♂️ BASE FLIGHT CFRAME CALCULATION
-            local heightOffset = 14
+            -- 🦸‍♂️ BASE FLIGHT CFRAME CALCULATION WITH ADJUSTABLE HEIGHT
+            local heightOffset = Settings.MaxInvertedDiveHeight
             local tiltAngle = math.rad(10)
             
             local pos = targetHead.Position + (targetHead.CFrame.UpVector * heightOffset)
@@ -1666,10 +1679,8 @@ local function loadOreosHub()
         end)
     end
 
-    -- Independent cleanup function that doesn't touch Bang connections
     local function stopMaxInvertedDive()
         if maxInvertedConn then maxInvertedConn:Disconnect(); maxInvertedConn = nil end
-        -- Restore animate script independently
         if invertedAnimateDisabled then
             local char = LocalPlayer.Character
             if char then
@@ -1706,7 +1717,6 @@ local function loadOreosHub()
             
             if not myHRP or not myHu then return end
             
-            -- ✅ INDEPENDENT ANIMATE DISABLE FOR GYM/BOTTOM BANG
             if not gymAnimateDisabled then
                 local animate = myChar:FindFirstChild("Animate")
                 if animate and animate:IsA("LocalScript") then
@@ -1724,7 +1734,6 @@ local function loadOreosHub()
             -- 🏋️ FIXED GYM ROOF POSITION
             local roofPos = Settings.GymPosition + Vector3.new(0, Settings.GymRoofHeight, 0)
             
-            -- Face downward toward gym floor while hanging from roof
             local lookDir = Vector3.new(0, -1, 0)
             local upDir = Vector3.new(0, 0, 1)
             local rightDir = Vector3.new(1, 0, 0)
@@ -1811,12 +1820,23 @@ local function loadOreosHub()
             pcall(function() myHu:SetStateEnabled(Enum.HumanoidStateType.Freefall, false) end)
             pcall(function() myHu:SetStateEnabled(Enum.HumanoidStateType.Jumping, false) end)
 
-            local target = getBangTarget()
+            -- ✅ USES SHARED GYM ATTACH TARGET INPUT
+            local targetName = Settings.GymAttachTarget
+            if targetName == "" then return end
+            local lowerName = targetName:lower()
+            local target = nil
+            for _, p in Players:GetPlayers() do
+                if p ~= LocalPlayer then
+                    if p.Name:lower():sub(1, #lowerName) == lowerName or p.DisplayName:lower():sub(1, #lowerName) == lowerName then
+                        target = p
+                        break
+                    end
+                end
+            end
             if not target or not target.Character then return end
 
             local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
             local targetFeet = nil
-            -- Try to find the lowest foot/leg part
             for _, partName in ipairs({"LeftFoot", "RightFoot", "LeftLowerLeg", "RightLowerLeg", "LeftUpperLeg", "RightUpperLeg"}) do
                 local part = target.Character:FindFirstChild(partName)
                 if part then targetFeet = part; break end
@@ -1824,16 +1844,13 @@ local function loadOreosHub()
             if not targetFeet then targetFeet = targetHRP end
             if not targetFeet then return end
 
-            -- 🦶 Position BELOW the feet (inverted from Superman's above-head logic)
             local depthOffset = Settings.BottomBangDepth
             local tiltAngle = math.rad(10)
 
-            -- Go DOWN from the feet
             local pos = targetFeet.Position + (targetFeet.CFrame.UpVector * -depthOffset)
             local lookDir = targetFeet.CFrame.LookVector
             local upDir = targetFeet.CFrame.UpVector
 
-            -- Tilt the pose (same 10° but flipped since we're upside down)
             local tiltedUp = upDir * math.cos(tiltAngle) - lookDir * math.sin(tiltAngle)
             local tiltedLook = lookDir * math.cos(tiltAngle) + upDir * math.sin(tiltAngle)
 
@@ -1847,7 +1864,6 @@ local function loadOreosHub()
             myHRP.AssemblyLinearVelocity = Vector3.zero
             myHRP.AssemblyAngularVelocity = Vector3.zero
 
-            -- 🦶 Limb overrides (same as Superman but mirrored)
             local upperTorso = myChar:FindFirstChild("UpperTorso")
             local lowerTorso = myChar:FindFirstChild("LowerTorso")
             if upperTorso and lowerTorso then
@@ -1915,7 +1931,6 @@ local function loadOreosHub()
         end
     end
 
-    -- Unified starter for gym/bottom bang features
     local function startGymFeaturesUnified()
         if Toggles.GymAttach then
             startGymAttachLoop()
@@ -2267,7 +2282,7 @@ local function loadOreosHub()
     -- Anti-Void with safe Y = -260 (skips during void grab)
     RunService.Heartbeat:Connect(function()
         if not Toggles.AntiVoid then return end
-        if voidActive then return end  -- Don't interfere with void grab
+        if voidActive then return end
         local ch = LocalPlayer.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
         if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
@@ -2304,45 +2319,23 @@ local function loadOreosHub()
     HomeTab:CreateLabel("  🍪 🍪 🍪 🍪")
     HomeTab:CreateLabel("🍪 🍪 🍪 🍪 🍪")
 
-    -- ✅ NEW: GYM ATTACH TAB (PLACED BEFORE GOD MODE)
+    -- ✅ UPDATED: GYM ATTACH TAB WITH SHARED TARGET INPUT
     local GymAttachTab = Window:CreateTab("Gym Attach 🏋️")
-    GymAttachTab:CreateSection("🏋️ Gym Roof Attachment")
-    GymAttachTab:CreateLabel("⚠️ Fixed position on gym roof - no target needed")
-    GymAttachTab:CreateLabel("✅ Uses captured gym coordinates + height offset")
     
-    GymAttachTab:CreateToggle({
-        Name = "🏋️ Enable Gym Roof Attach",
-        CurrentValue = false,
-        Flag = "GymAttachToggle",
-        Callback = function(v)
-            PlayClickSound()
-            Toggles.GymAttach = v
-            startGymFeaturesUnified()
-            sendWebhookLog("🏋️ Gym Attach", (v and "**Enabled** Roof Attach" or "**Disabled** Roof Attach"), v and 5763719 or 15548997)
+    -- 🎯 SHARED TARGET INPUT FOR BOTH FEATURES
+    GymAttachTab:CreateSection("🎯 Target Selection")
+    GymAttachTab:CreateLabel("⚠️ Enter target name for Bottom Bang & Max Inverted Dive")
+    GymAttachTab:CreateInput({
+        Name = "Target Player Name",
+        PlaceholderText = "Enter username...",
+        RemoveTextAfterFocusLost = false,
+        CurrentValue = "",
+        Callback = function(text) 
+            Settings.GymAttachTarget = text 
         end
     })
     
-    GymAttachTab:CreateSlider({
-        Name = "Roof Height Offset",
-        Range = {5, 30},
-        Increment = 1,
-        Suffix = " studs",
-        CurrentValue = 15,
-        Flag = "GymRoofHeight",
-        Callback = function(v)
-            Settings.GymRoofHeight = v
-            -- Restart loop to apply new height immediately
-            if Toggles.GymAttach then
-                stopGymAttach()
-                task.wait(0.05)
-                startGymAttachLoop()
-            end
-        end
-    })
-    
-    GymAttachTab:CreateLabel("💡 Adjust height if clipping through roof or floating too high")
-    
-    -- ✅ BOTTOM BANG UNDER FEET SECTION
+    -- 🦶 BOTTOM BANG UNDER FEET SECTION
     GymAttachTab:CreateDivider()
     GymAttachTab:CreateSection("🦶 Bottom Bang (Under Feet)")
     GymAttachTab:CreateLabel("⚠️ Targets player below their feet, inverted 179°")
@@ -2369,7 +2362,6 @@ local function loadOreosHub()
         Flag = "BottomBangDepth",
         Callback = function(v)
             Settings.BottomBangDepth = v
-            -- Restart loop to apply new depth immediately
             if Toggles.BottomBangFeet then
                 stopBottomBangFeet()
                 task.wait(0.05)
@@ -2380,10 +2372,10 @@ local function loadOreosHub()
     
     GymAttachTab:CreateLabel("💡 Adjust depth to position correctly under target's feet")
     
-    -- ✅ MAXIMUM INVERTED DIVE SECTION (MOVED FROM BANG TAB)
+    -- 🦸‍♂️ MAXIMUM INVERTED DIVE SECTION (MOVED FROM BANG TAB)
     GymAttachTab:CreateDivider()
     GymAttachTab:CreateSection("🦸‍♂️ Maximum Inverted Dive")
-    GymAttachTab:CreateLabel("⚠️ 179° tilt + 14 stud height above target's head")
+    GymAttachTab:CreateLabel("⚠️ 179° tilt + adjustable height above target's head")
     GymAttachTab:CreateLabel("✅ Uses separate animate bypass - won't interfere with other modes")
     
     GymAttachTab:CreateToggle({
@@ -2401,6 +2393,62 @@ local function loadOreosHub()
             sendWebhookLog("🦸‍♂️ Max Inverted Dive", (v and "**Enabled** 179° Dive" or "**Disabled** 179° Dive"), v and 5763719 or 15548997)
         end
     })
+    
+    GymAttachTab:CreateSlider({
+        Name = "Dive Height Above Head",
+        Range = {5, 30},
+        Increment = 1,
+        Suffix = " studs",
+        CurrentValue = 14,
+        Flag = "MaxInvertedDiveHeight",
+        Callback = function(v)
+            Settings.MaxInvertedDiveHeight = v
+            if Toggles.MaxInvertedDive then
+                stopMaxInvertedDive()
+                task.wait(0.05)
+                startMaxInvertedDiveLoop()
+            end
+        end
+    })
+    
+    GymAttachTab:CreateLabel("💡 Adjust height to position correctly above target's head")
+    
+    -- 🏋️ GYM ROOF ATTACH SECTION (KEPT AT BOTTOM)
+    GymAttachTab:CreateDivider()
+    GymAttachTab:CreateSection("🏋️ Gym Roof Attachment")
+    GymAttachTab:CreateLabel("⚠️ Fixed position on gym roof - no target needed")
+    GymAttachTab:CreateLabel("✅ Uses captured gym coordinates + height offset")
+    
+    GymAttachTab:CreateToggle({
+        Name = "🏋️ Enable Gym Roof Attach",
+        CurrentValue = false,
+        Flag = "GymAttachToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Toggles.GymAttach = v
+            startGymFeaturesUnified()
+            sendWebhookLog("🏋️ Gym Attach", (v and "**Enabled** Roof Attach" or "**Disabled** Roof Attach"), v and 5763719 or 15548997)
+        end
+    })
+    
+    GymAttachTab:CreateSlider({
+        Name = "Roof Height Offset",
+        Range = {5, 30},
+        Increment = 1,
+        Suffix = " studs",
+        CurrentValue = 15,
+        Flag = "GymRoofHeight",
+        Callback = function(v)
+            Settings.GymRoofHeight = v
+            if Toggles.GymAttach then
+                stopGymAttach()
+                task.wait(0.05)
+                startGymAttachLoop()
+            end
+        end
+    })
+    
+    GymAttachTab:CreateLabel("💡 Adjust height if clipping through roof or floating too high")
 
     -- GOD MODE TAB
     local GodModeTab = Window:CreateTab("God Mode 🥊")
