@@ -1,5 +1,5 @@
 -- ============================================
--- OREO'S HUB - FULL SCRIPT (GYM ATTACH INTEGRATED)
+-- OREO'S HUB - FULL SCRIPT (CHAT STYLES + GYM LOOP TELEPORT INTEGRATED)
 -- ============================================
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
+local TextChatService = game:GetService("TextChatService") -- ✅ Added for Chat Styles
 local LocalPlayer = Players.LocalPlayer
 local resetConn = nil
 
@@ -230,9 +231,18 @@ local function loadOreosHub()
         TargetUsername = "",
         GymRoofHeight = 15,
         BottomBangDepth = 14,
-        GymAttachTarget = "", -- ✅ SHARED TARGET FOR GYM ATTACH FEATURES
-        MaxInvertedDiveHeight = 14, -- ✅ ADJUSTABLE HEIGHT FOR MAX INVERTED DIVE
+        GymAttachTarget = "",
+        MaxInvertedDiveHeight = 14,
+        -- ✅ NEW SETTINGS FOR CHAT & GYM LOOP
+        ChatRawMessage = "",
+        ChatCurrentStyle = "None",
+        GymLoopTeleportEnabled = false,
+        GymLoopSpeed = 0.1, -- Seconds between teleports
     }
+
+    -- Global chat state for styles
+    _G.ChatRawMessage = ""
+    _G.ChatCurrentStyle = "None"
 
     -- ============================================
     -- ✨ ORIGINAL GLOWING BIO + NAME SYSTEM ✨
@@ -1389,7 +1399,7 @@ local function loadOreosHub()
     end
 
     -- ============================================
-    -- BANG SYSTEM WITH FAST MODE (UNCHANGED)
+    -- BANG SYSTEM WITH FAST MODE
     -- ============================================
     local bangConn = nil
     local orbitAngle = 0
@@ -1704,6 +1714,19 @@ local function loadOreosHub()
     local gymAttachConn = nil
     local gymAnimateScript = nil
     local gymAnimateDisabled = false
+    
+    -- ✅ GYM LOOP TELEPORT CONNECTION
+    local gymLoopConn = nil
+    local gymLoopIndex = 1
+
+    -- ✅ YOUR CAPTURED COORDINATES FROM CONSOLE LOGS
+    local GYM_SLOTS = {
+        Vector3.new(-88.81148529052734, 3.3313992023468018, 608.6553344726562),   -- Slot 1
+        Vector3.new(-130.83612060546875, 3.236753463745117, 610.3096923828125),  -- Slot 2
+        Vector3.new(-86.27005767822266, 3.3314011096954346, 526.5738525390625),  -- Slot 3
+        Vector3.new(-106.01163482666016, 3.3313095569610596, 567.5775146484375), -- Slot 4
+        Vector3.new(-128.61044311523438, 3.3359944820404053, 530.7340698242188)  -- Slot 5
+    }
 
     local function startGymAttachLoop()
         if gymAttachConn then gymAttachConn:Disconnect() end
@@ -1930,6 +1953,35 @@ local function loadOreosHub()
             bottomBangAnimateScript = nil
         end
     end
+    
+    -- ✅ GYM LOOP TELEPORT FUNCTIONS
+    local function startGymLoopTeleport()
+        if gymLoopConn then gymLoopConn:Disconnect() end
+        
+        gymLoopIndex = 1
+        
+        gymLoopConn = RunService.Heartbeat:Connect(function()
+            if not Settings.GymLoopTeleportEnabled then return end
+            
+            local myChar = LocalPlayer.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            
+            if not myHRP then return end
+            
+            -- ⚡ INSTANT TELEPORT TO CURRENT SLOT
+            local targetPos = GYM_SLOTS[gymLoopIndex]
+            myHRP.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
+            myHRP.AssemblyLinearVelocity = Vector3.zero
+            myHRP.AssemblyAngularVelocity = Vector3.zero
+            
+            -- Cycle to next slot
+            gymLoopIndex = gymLoopIndex % #GYM_SLOTS + 1
+        end)
+    end
+    
+    local function stopGymLoopTeleport()
+        if gymLoopConn then gymLoopConn:Disconnect(); gymLoopConn = nil end
+    end
 
     local function startGymFeaturesUnified()
         if Toggles.GymAttach then
@@ -1943,383 +1995,156 @@ local function loadOreosHub()
         else
             stopBottomBangFeet()
         end
-    end
-
-    -- ============================================
-    -- KILL AURA
-    -- ============================================
-    local kaConn = nil
-
-    local function isKATarget(name)
-        local text = (Settings.KATargets or ""):lower():gsub("^%s*(.-)%s*$", "%1")
-        if text == "" or text == "all" then return true end
-        local lowerName = name:lower()
-        for t in text:gmatch("%S+") do
-            if lowerName:find(t, 1, true) then return true end
+        
+        -- ✅ MANAGE GYM LOOP TELEPORT SEPARATELY
+        if Settings.GymLoopTeleportEnabled then
+            startGymLoopTeleport()
+        else
+            stopGymLoopTeleport()
         end
-        return false
-    end
-
-    local function doKAHit(hum, pos)
-        if not hum or not hum.Parent then return end
-        if not HitRF then return end
-        pcall(function()
-            if HitRF:IsA("RemoteFunction") then
-                HitRF:InvokeServer(hum, Vector3.new(pos.X, pos.Y, pos.Z))
-            else
-                HitRF:FireServer(hum, Vector3.new(pos.X, pos.Y, pos.Z))
-            end
-        end)
-    end
-
-    local function startKA()
-        if kaConn then kaConn:Disconnect() end
-        kaConn = RunService.Heartbeat:Connect(function()
-            if not Toggles.KillAura or not HitRF then return end
-            local mc = LocalPlayer.Character
-            if not mc then return end
-            local myHRP = mc:FindFirstChild("HumanoidRootPart")
-            if not myHRP then return end
-
-            local sl = parseList(Settings.KASafe)
-            local nearest = nil
-            local nearDist = math.huge
-
-            for _, p in Players:GetPlayers() do
-                if p == LocalPlayer then continue end
-                if not p.Character then continue end
-                if isSafe(p.Name, sl) then continue end
-                if not isKATarget(p.Name) then continue end
-
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-
-                if hrp and hum and hum.Health > 0 then
-                    local healthPercent = hum.Health / hum.MaxHealth * 100
-                    local shouldHit = true
-                    if Settings.KAHealthStop > 0 and healthPercent <= Settings.KAHealthStop then
-                        shouldHit = false
-                    end
-
-                    if shouldHit then
-                        local dist = (hrp.Position - myHRP.Position).Magnitude
-                        if dist <= Settings.KARange and dist < nearDist then
-                            nearDist = dist
-                            nearest = {
-                                hum = hum,
-                                pos = hrp.Position + hrp.CFrame.LookVector * 2
-                            }
-                        end
-                    end
-                end
-            end
-
-            if nearest then
-                task.spawn(function()
-                    doKAHit(nearest.hum, nearest.pos)
-                end)
-            end
-        end)
-    end
-
-    local function stopKA()
-        if kaConn then kaConn:Disconnect(); kaConn = nil end
     end
 
     -- ============================================
-    -- SPAM GRAB
+    -- 💬 CHAT STYLE TESTER (NEW TAB - PLACED BEFORE GYM ATTACH)
     -- ============================================
-    local grabConn = nil
-    local function startGrab()
-        if grabConn then grabConn:Disconnect() end
-        grabConn = RunService.Heartbeat:Connect(function()
-            if not Toggles.SpamGrab or not GrabRF then return end
-            local t1 = findPlayerByName(Settings.GrabTarget1)
-            local t2 = findPlayerByName(Settings.GrabTarget2)
-            if t1 or t2 then
-                if t1 then
-                    pcall(function()
-                        if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(t1)
-                        else GrabRF:FireServer(t1) end
-                    end)
+    local ChatStyleTab = Window:CreateTab("💬 Chat Styles")
+    
+    ChatStyleTab:CreateSection("🔤 Message Input")
+    ChatStyleTab:CreateLabel("⚠️ For educational testing only. Use appropriate content.")
+    
+    -- Raw message input
+    ChatStyleTab:CreateInput({
+        Name = "Original Message",
+        PlaceholderText = "Type test message here...",
+        RemoveTextAfterFocusLost = false,
+        CurrentValue = "",
+        Flag = "ChatRawInput",
+        Callback = function(text)
+            _G.ChatRawMessage = text
+        end
+    })
+    
+    -- Style selector
+    ChatStyleTab:CreateSection("🎨 Obfuscation Style")
+    ChatStyleTab:CreateLabel("Select a style to preview transformation:")
+    
+    -- Create a label to show the transformed preview
+    local previewLabel = ChatStyleTab:CreateLabel("Preview: ➜ [empty]")
+    
+    -- Style transformation functions
+    local function transformText(text, style)
+        if not text or text == "" then return "" end
+        
+        if style == "Leetspeak" then
+            local replacements = {["a"]="4", ["e"]="3", ["i"]="1", ["o"]="0", ["s"]="5", ["t"]="7", ["l"]="1"}
+            return text:lower():gsub("[aeioslt]", replacements)
+        elseif style == "Cyrillic" then
+            local cyrillicMap = {["a"]="а", ["e"]="е", ["o"]="о", ["p"]="р", ["c"]="с", ["y"]="у", ["x"]="х"}
+            return text:lower():gsub("[aeopcyx]", cyrillicMap)
+        elseif style == "Zalgo" then
+            local combiningChars = {"\u{0300}", "\u{0301}", "\u{0302}", "\u{0303}", "\u{0304}", "\u{0305}"}
+            local result = ""
+            for i = 1, #text do
+                result = result .. text:sub(i,i)
+                if math.random() > 0.5 then
+                    result = result .. combiningChars[math.random(#combiningChars)]
                 end
-                if t2 and t2 ~= t1 then
-                    pcall(function()
-                        if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(t2)
-                        else GrabRF:FireServer(t2) end
-                    end)
-                end
-                lastIGrabbedTime = tick()
+            end
+            return result
+        elseif style == "UpperCase" then
+            return text:upper()
+        elseif style == "Reverse" then
+            return text:reverse()
+        else
+            return text
+        end
+    end
+    
+    -- Update preview when input changes
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            local raw = _G.ChatRawMessage or ""
+            local transformed = transformText(raw, _G.ChatCurrentStyle)
+            previewLabel.Text = (transformed ~= "") and ("➜ " .. transformed) or "➜ [empty]"
+        end
+    end)
+    
+    -- Style buttons
+    local styles = {"None", "Leetspeak", "Cyrillic", "Zalgo", "UpperCase", "Reverse"}
+    for _, style in ipairs(styles) do
+        ChatStyleTab:CreateButton({
+            Name = style,
+            Callback = function()
+                PlayClickSound()
+                _G.ChatCurrentStyle = style
+                Rayfield:Notify({ 
+                    Title = "🎨 Style Selected", 
+                    Content = "Applied: " .. style, 
+                    Duration = 2, 
+                    Image = 4483362458 
+                })
+            end
+        })
+    end
+    
+    ChatStyleTab:CreateDivider()
+    ChatStyleTab:CreateSection("📤 Send Transformed Message")
+    
+    ChatStyleTab:CreateButton({
+        Name = "📤 Send via TextChatService",
+        Callback = function()
+            local raw = _G.ChatRawMessage or ""
+            if raw:gsub("%s+", "") == "" then
+                Rayfield:Notify({ 
+                    Title = "❌ Error", 
+                    Content = "Please type a message first!", 
+                    Duration = 3, 
+                    Image = 4483362458 
+                })
                 return
             end
-            for _, p in Players:GetPlayers() do
-                if p ~= LocalPlayer and p.Character then
-                    pcall(function()
-                        if GrabRF:IsA("RemoteFunction") then GrabRF:InvokeServer(p)
-                        else GrabRF:FireServer(p) end
-                    end)
-                    lastIGrabbedTime = tick()
-                    break
-                end
-            end
-        end)
-    end
-    local function stopGrab() if grabConn then grabConn:Disconnect(); grabConn = nil end end
-
-    -- ============================================
-    -- HITBOX
-    -- ============================================
-    local hbConn = nil
-    local function startHitbox()
-        if hbConn then hbConn:Disconnect() end
-        hbConn = RunService.Heartbeat:Connect(function()
-            if not Toggles.Hitbox then return end
-            local mc = LocalPlayer.Character
-            if not mc then return end
-            for _, v in mc:GetDescendants() do
-                if v:IsA("BasePart") then
-                    pcall(function() v.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize) end)
-                end
-            end
-        end)
-    end
-    local function stopHitbox() if hbConn then hbConn:Disconnect(); hbConn = nil end end
-
-    -- ============================================
-    -- SPEED + FLY
-    -- ============================================
-    local flyConn = nil
-    local flyBodyVelocity = nil
-    local flyBodyGyro = nil
-    local savedAnimations = {}
-    local jumpConn = nil
-    local stateConn = nil
-
-    local function setIdleAnimation()
-        local ch = LocalPlayer.Character
-        if not ch then return end
-        local animate = ch:FindFirstChild("Animate")
-        if not animate then return end
-        savedAnimations = {}
-        for _, name in ipairs({"walk", "run"}) do
-            local folder = animate:FindFirstChild(name)
-            if folder then
-                local anim = folder:FindFirstChildOfClass("Animation")
-                if anim then
-                    savedAnimations[name] = anim.AnimationId
-                    anim.AnimationId = "rbxassetid://0"
-                end
-            end
-        end
-    end
-
-    local function restoreAnimations()
-        local ch = LocalPlayer.Character
-        if not ch then return end
-        local animate = ch:FindFirstChild("Animate")
-        if not animate then return end
-        for name, originalId in pairs(savedAnimations) do
-            local folder = animate:FindFirstChild(name)
-            if folder then
-                local anim = folder:FindFirstChildOfClass("Animation")
-                if anim then anim.AnimationId = originalId end
-            end
-        end
-        savedAnimations = {}
-    end
-
-    local function applySpeed()
-        local ch = LocalPlayer.Character
-        local hu = ch and ch:FindFirstChildOfClass("Humanoid")
-        if hu then
-            hu.WalkSpeed = Toggles.SpeedFlyEnabled and Settings.WalkSpeed or 16
-        end
-    end
-
-    local function startFlyLoop()
-        if flyConn then flyConn:Disconnect() end
-        local ch = LocalPlayer.Character
-        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        if Toggles.FlyMode then
-            flyConn = RunService.Heartbeat:Connect(function(dt)
-                if not Toggles.FlyActive then return end
-                local c = LocalPlayer.Character
-                local r = c and c:FindFirstChild("HumanoidRootPart")
-                local h = c and c:FindFirstChildOfClass("Humanoid")
-                if not r or not h then return end
-                local direction = h.MoveDirection
-                local vertical = 0
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vertical = 1
-                elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vertical = -1 end
-                local final = direction + Vector3.new(0, vertical, 0)
-                if final.Magnitude > 0 then
-                    final = final.Unit
-                    r.CFrame = r.CFrame + (final * Settings.FlySpeed * dt)
-                end
-                r.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            end)
-        else
-            flyBodyVelocity = Instance.new("BodyVelocity")
-            flyBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            flyBodyVelocity.Velocity = Vector3.zero
-            flyBodyVelocity.Parent = hrp
-
-            flyBodyGyro = Instance.new("BodyGyro")
-            flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-            flyBodyGyro.P = 9e4
-            flyBodyGyro.CFrame = hrp.CFrame
-            flyBodyGyro.Parent = hrp
-
-            flyConn = RunService.Heartbeat:Connect(function()
-                if not Toggles.FlyActive then return end
-                local c = LocalPlayer.Character
-                local r = c and c:FindFirstChild("HumanoidRootPart")
-                local h = c and c:FindFirstChildOfClass("Humanoid")
-                if not r or not h then return end
-                local direction = h.MoveDirection
-                local vertical = 0
-                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vertical = 1
-                elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vertical = -1 end
-                flyBodyVelocity.Velocity = (direction * Settings.FlySpeed) + Vector3.new(0, vertical * Settings.FlySpeed, 0)
-                flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
-            end)
-        end
-    end
-
-    local function stopFlyLoop()
-        if flyConn then flyConn:Disconnect(); flyConn = nil end
-        if flyBodyVelocity then flyBodyVelocity:Destroy(); flyBodyVelocity = nil end
-        if flyBodyGyro then flyBodyGyro:Destroy(); flyBodyGyro = nil end
-    end
-
-    local function activateFly()
-        if not Toggles.SpeedFlyEnabled then return end
-        if Toggles.FlyActive then return end
-        Toggles.FlyActive = true
-        setIdleAnimation()
-        startFlyLoop()
-    end
-
-    local function deactivateFly()
-        if not Toggles.FlyActive then return end
-        Toggles.FlyActive = false
-        stopFlyLoop()
-        restoreAnimations()
-    end
-
-    local function hookCharacter(ch)
-        if jumpConn then jumpConn:Disconnect() end
-        if stateConn then stateConn:Disconnect() end
-        local hu = ch:WaitForChild("Humanoid", 5)
-        if not hu then return end
-        jumpConn = hu.Jumping:Connect(function()
-            if Toggles.SpeedFlyEnabled then
-                task.wait(Settings.FlyHoldTime)
-                if hu:GetState() ~= Enum.HumanoidStateType.Landed and Toggles.SpeedFlyEnabled then
-                    activateFly()
-                end
-            end
-        end)
-        stateConn = hu.StateChanged:Connect(function(_, newState)
-            if newState == Enum.HumanoidStateType.Landed
-               or newState == Enum.HumanoidStateType.Running
-               or newState == Enum.HumanoidStateType.RunningNoPhysics then
-                if Toggles.FlyActive then deactivateFly() end
-            end
-        end)
-    end
-
-    LocalPlayer.CharacterAdded:Connect(function(ch)
-        task.wait(0.5)
-        hookCharacter(ch)
-        if Toggles.SpeedFlyEnabled then applySpeed() end
-        if Toggles.SpinPlayer then
-            stopSpin()
-            task.wait(0.1)
-            startSpin()
-        end
-    end)
-
-    if LocalPlayer.Character then hookCharacter(LocalPlayer.Character) end
-
-    local function toggleSpeedFly(v)
-        Toggles.SpeedFlyEnabled = v
-        applySpeed()
-        if not v then deactivateFly() end
-    end
-
-    -- ============================================
-    -- PROTECTION LOOPS (AntiVoid now uses safe Y)
-    -- ============================================
-    RunService.Heartbeat:Connect(function()
-        if Toggles.AntiRag and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
-            local ch = LocalPlayer.Character
-            if ch then
-                local hu = ch:FindFirstChildOfClass("Humanoid")
-                if hu then
-                    for _, st in ipairs({Enum.HumanoidStateType.Ragdoll, Enum.HumanoidStateType.Physics, Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.PlatformStanding}) do
-                        pcall(function() hu:SetStateEnabled(st, false) end)
+            
+            local transformed = transformText(raw, _G.ChatCurrentStyle)
+            
+            local success, err = pcall(function()
+                if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                    local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+                    if channel then
+                        channel:SendAsync(transformed)
+                    else
+                        error("RBXGeneral channel not found")
                     end
-                    hu.PlatformStand = false
+                else
+                    error("Game not using TextChatService")
                 end
-            end
-        end
-    end)
-
-    RunService.Heartbeat:Connect(function()
-        if Toggles.AntiFling and not Toggles.FlyActive and not isAnyBangActive() and not voidActive then
-            local ch = LocalPlayer.Character
-            local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if hrp.AssemblyAngularVelocity.Magnitude > 15 then hrp.AssemblyAngularVelocity = Vector3.zero end
-                if hrp.AssemblyLinearVelocity.Magnitude > 150 then hrp.AssemblyLinearVelocity = hrp.AssemblyLinearVelocity * 0.75 end
-            end
-        end
-    end)
-
-    -- Anti-Void with safe Y = -260 (skips during void grab)
-    RunService.Heartbeat:Connect(function()
-        if not Toggles.AntiVoid then return end
-        if voidActive then return end
-        local ch = LocalPlayer.Character
-        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-        if hrp and hrp.Position.Y < Settings.AntiVoidMinY then
-            hrp.Velocity = Vector3.new(0, 0, 0)
-            hrp.CFrame = CFrame.new(hrp.Position.X, 50, hrp.Position.Z)
-        end
-    end)
-
-    LocalPlayer.Idled:Connect(function()
-        if Toggles.AntiAFK then
-            pcall(function()
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton2(Vector2.new())
             end)
+            
+            if success then
+                Rayfield:Notify({ 
+                    Title = "✅ Sent [" .. _G.ChatCurrentStyle .. "]", 
+                    Content = "\"" .. transformed .. "\"", 
+                    Duration = 3, 
+                    Image = 4483362458 
+                })
+                print("[ChatStyles] Sent (" .. _G.ChatCurrentStyle .. "):", transformed)
+            else
+                Rayfield:Notify({ 
+                    Title = "❌ Failed", 
+                    Content = tostring(err), 
+                    Duration = 5, 
+                    Image = 4483362458 
+                })
+                print("[ChatStyles] Error:", err)
+            end
         end
-    end)
-
-    -- ============================================
-    -- TABS
-    -- ============================================
-    local HomeTab = Window:CreateTab("Home 🍪")
-    HomeTab:CreateSection("Welcome to Oreo's Hub!")
-    HomeTab:CreateLabel("🍪 Oreo's Hub 🍪")
-    HomeTab:CreateLabel("MADE BY Oreo")
-    HomeTab:CreateLabel("Discord: @oreo.fv")
-    HomeTab:CreateDivider()
-    HomeTab:CreateButton({
-        Name = "🍪 Play Oreo Crunch",
-        Callback = function() PlayOreoCrunch() end
     })
-    HomeTab:CreateLabel("        🍪")
-    HomeTab:CreateLabel("      🍪 🍪")
-    HomeTab:CreateLabel("    🍪 🍪 🍪")
-    HomeTab:CreateLabel("  🍪 🍪 🍪 🍪")
-    HomeTab:CreateLabel("🍪 🍪 🍪 🍪 🍪")
+    
+    ChatStyleTab:CreateLabel("💡 Note: Roblox filters may still modify or block transformed text")
 
-    -- ✅ UPDATED: GYM ATTACH TAB WITH SHARED TARGET INPUT
+    -- ============================================
+    -- 🏋️ GYM ATTACH TAB (WITH LOOP TELEPORT)
+    -- ============================================
     local GymAttachTab = Window:CreateTab("Gym Attach 🏋️")
     
     -- 🎯 SHARED TARGET INPUT FOR BOTH FEATURES
@@ -2449,6 +2274,45 @@ local function loadOreosHub()
     })
     
     GymAttachTab:CreateLabel("💡 Adjust height if clipping through roof or floating too high")
+    
+    -- ✅ NEW: FAST LOOP TELEPORT SECTION
+    GymAttachTab:CreateDivider()
+    GymAttachTab:CreateSection("⚡ Fast Loop Teleport")
+    GymAttachTab:CreateLabel("⚠️ Cycles through all 5 captured gym positions")
+    GymAttachTab:CreateLabel("✅ Zero-delay teleportation with velocity reset")
+    
+    GymAttachTab:CreateToggle({
+        Name = "⚡ Enable Loop Teleport",
+        CurrentValue = false,
+        Flag = "GymLoopTeleportToggle",
+        Callback = function(v)
+            PlayClickSound()
+            Settings.GymLoopTeleportEnabled = v
+            startGymFeaturesUnified() -- Manages loop connection
+            sendWebhookLog("⚡ Gym Loop", (v and "**Enabled** Loop Teleport" or "**Disabled** Loop Teleport"), v and 5763719 or 15548997)
+        end
+    })
+    
+    GymAttachTab:CreateSlider({
+        Name = "Loop Speed",
+        Range = {0.01, 2},
+        Increment = 0.01,
+        Suffix = " seconds",
+        CurrentValue = 0.1,
+        Flag = "GymLoopSpeed",
+        Callback = function(v)
+            Settings.GymLoopSpeed = v
+            -- Restart loop to apply new speed immediately
+            if Settings.GymLoopTeleportEnabled then
+                stopGymLoopTeleport()
+                task.wait(0.05)
+                startGymLoopTeleport()
+            end
+        end
+    })
+    
+    GymAttachTab:CreateLabel("💡 Lower values = faster cycling between positions")
+    GymAttachTab:CreateLabel("⚠️ Extreme speeds may cause motion sickness or physics glitches")
 
     -- GOD MODE TAB
     local GodModeTab = Window:CreateTab("God Mode 🥊")
@@ -3808,7 +3672,7 @@ local function createKeySystem()
     updateTag.Size = UDim2.new(0, 300, 0, 12)
     updateTag.Position = UDim2.new(0, 20, 0, 8)
     updateTag.BackgroundTransparency = 1
-    updateTag.Text = "🆕 Gym Attach + Bottom Bang + Max Inverted Dive"
+    updateTag.Text = "🆕 Chat Styles + Gym Loop Teleport + Fast Mode Bang"
     updateTag.TextColor3 = Color3.fromRGB(180, 130, 255)
     updateTag.Font = Enum.Font.GothamBold
     updateTag.TextSize = 10
