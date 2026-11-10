@@ -1,5 +1,5 @@
 -- ============================================
--- OREO'S HUB - FULL SCRIPT (CHAT STYLES + GYM LOOP TELEPORT INTEGRATED)
+-- OREO'S HUB - FULL SCRIPT (HOME TAB RESTORED)
 -- ============================================
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -8,7 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
-local TextChatService = game:GetService("TextChatService") -- ✅ Added for Chat Styles
+local TextChatService = game:GetService("TextChatService")
 local LocalPlayer = Players.LocalPlayer
 local resetConn = nil
 
@@ -233,11 +233,10 @@ local function loadOreosHub()
         BottomBangDepth = 14,
         GymAttachTarget = "",
         MaxInvertedDiveHeight = 14,
-        -- ✅ NEW SETTINGS FOR CHAT & GYM LOOP
         ChatRawMessage = "",
         ChatCurrentStyle = "None",
         GymLoopTeleportEnabled = false,
-        GymLoopSpeed = 0.1, -- Seconds between teleports
+        GymLoopSpeed = 0.1,
     }
 
     -- Global chat state for styles
@@ -2313,6 +2312,27 @@ local function loadOreosHub()
     
     GymAttachTab:CreateLabel("💡 Lower values = faster cycling between positions")
     GymAttachTab:CreateLabel("⚠️ Extreme speeds may cause motion sickness or physics glitches")
+
+    -- ============================================
+    -- TABS (HOME TAB RESTORED HERE)
+    -- ============================================
+    
+    -- ✅ RESTORED HOME TAB WITH OREO CRUNCH
+    local HomeTab = Window:CreateTab("Home 🍪")
+    HomeTab:CreateSection("Welcome to Oreo's Hub!")
+    HomeTab:CreateLabel("🍪 Oreo's Hub 🍪")
+    HomeTab:CreateLabel("MADE BY Oreo")
+    HomeTab:CreateLabel("Discord: @oreo.fv")
+    HomeTab:CreateDivider()
+    HomeTab:CreateButton({
+        Name = "🍪 Play Oreo Crunch",
+        Callback = function() PlayOreoCrunch() end
+    })
+    HomeTab:CreateLabel("        🍪")
+    HomeTab:CreateLabel("      🍪 🍪")
+    HomeTab:CreateLabel("    🍪 🍪 🍪")
+    HomeTab:CreateLabel("  🍪 🍪 🍪 🍪")
+    HomeTab:CreateLabel("🍪 🍪 🍪 🍪 🍪")
 
     -- GOD MODE TAB
     local GodModeTab = Window:CreateTab("God Mode 🥊")
