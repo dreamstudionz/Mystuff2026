@@ -1,1 +1,761 @@
+-- ============================================
+-- ⚔️ BR ANGELICIOUS (REMASTERED BY OREO)
+-- Fixed AutoClicker (World Targeting) & Keybinds
+-- ============================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
 
+local LocalPlayer = Players.LocalPlayer
+local cfg = {}
+local bindings = {}
+local uiButtons = {}
+
+-- AutoClicker specific variables
+local clickPos = nil
+local isSelectingPos = false
+
+-- ============================================
+-- 🔍 REMOTE DETECTION
+-- ============================================
+local HitRF, GrabRF, CarryRF, InstaRF = nil, nil, nil, nil
+for _, child in pairs(ReplicatedStorage:GetDescendants()) do
+    if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+        local n = child.Name:lower()
+        if n == "hit" or n == "punch" or n == "attack" then HitRF = child end
+        if n == "grab" or n == "carry" then GrabRF = child; CarryRF = child end
+        if n == "insta" or n == "instakill" then InstaRF = child end
+    end
+end
+
+-- ============================================
+-- 🎨 GUI CREATION
+-- ============================================
+if CoreGui:FindFirstChild("FunctionalGridUI") then CoreGui:FindFirstChild("FunctionalGridUI"):Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "FunctionalGridUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = CoreGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 420, 0, 650)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -325)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 200)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = gui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 6)
+
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 30)
+header.BackgroundColor3 = Color3.fromRGB(0, 0, 130)
+header.BorderSizePixel = 0
+header.Parent = mainFrame
+Instance.new("UICorner", header).CornerRadius = UDim.new(0, 6)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -80, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "BR Angelicious (Remastered By Oreo)"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 12
+title.Parent = header
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 26, 0, 24)
+minimizeBtn.Position = UDim2.new(1, -58, 0, 3)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
+minimizeBtn.Text = "−"
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 16
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = header
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 4)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 24)
+closeBtn.Position = UDim2.new(1, -30, 0, 3)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = header
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 4)
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -20, 1, -40)
+scrollFrame.Position = UDim2.new(0, 10, 0, 35)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 255)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 4)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = scrollFrame
+
+local pad = Instance.new("UIPadding")
+pad.PaddingBottom = UDim.new(0, 10)
+pad.Parent = scrollFrame
+
+-- ============================================
+-- 🧩 UI FACTORY
+-- ============================================
+local function createToggle(labelText, defaultValue, callback, featureKey)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -6, 0, 24)
+    row.BackgroundTransparency = 1
+    row.Parent = scrollFrame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -30, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 120)
+    btn.Text = " " .. labelText .. ": OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 12
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.BorderSizePixel = 0
+    btn.Parent = row
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+    uiButtons[featureKey] = { button = btn, text = labelText }
+
+    if defaultValue then cfg[featureKey] = true; btn.Text = " " .. labelText .. ": ON"; btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0) end
+
+    btn.MouseButton1Click:Connect(function()
+        cfg[featureKey] = not cfg[featureKey]
+        btn.Text = " " .. labelText .. ": " .. (cfg[featureKey] and "ON" or "OFF")
+        btn.BackgroundColor3 = cfg[featureKey] and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(30, 30, 120)
+        if callback then callback(cfg[featureKey]) end
+    end)
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 26, 1, 0)
+    bindBtn.Position = UDim2.new(1, -26, 0, 0)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 100)
+    bindBtn.Text = "bind"
+    bindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    bindBtn.Font = Enum.Font.SourceSans
+    bindBtn.TextSize = 10
+    bindBtn.BorderSizePixel = 0
+    bindBtn.Parent = row
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        bindBtn.Text = "..."
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                bindings[featureKey] = input.KeyCode
+                bindBtn.Text = input.KeyCode.Name:sub(1, 3)
+                conn:Disconnect()
+            end
+        end)
+    end)
+end
+
+local function createTextbox(labelText, placeholder, callback, featureKey)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -6, 0, 38)
+    frame.BackgroundTransparency = 1
+    frame.Parent = scrollFrame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 14)
+    label.BackgroundTransparency = 1
+    label.Text = " " .. labelText
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -30, 0, 22)
+    box.Position = UDim2.new(0, 0, 0, 16)
+    box.BackgroundColor3 = Color3.fromRGB(30, 30, 120)
+    box.PlaceholderText = placeholder
+    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Font = Enum.Font.SourceSans
+    box.TextSize = 11
+    box.BorderSizePixel = 0
+    box.ClearTextOnFocus = false
+    box.Parent = frame
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
+
+    box.FocusLost:Connect(function()
+        cfg[featureKey] = box.Text
+        if callback then callback(box.Text) end
+    end)
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 26, 0, 22)
+    bindBtn.Position = UDim2.new(1, -26, 0, 16)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 100)
+    bindBtn.Text = "bind"
+    bindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    bindBtn.Font = Enum.Font.SourceSans
+    bindBtn.TextSize = 10
+    bindBtn.BorderSizePixel = 0
+    bindBtn.Parent = frame
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+
+    bindBtn.MouseButton1Click:Connect(function()
+        bindBtn.Text = "..."
+        local conn
+        conn = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                bindings[featureKey] = input.KeyCode
+                bindBtn.Text = input.KeyCode.Name:sub(1, 3)
+                conn:Disconnect()
+            end
+        end)
+    end)
+end
+
+local function createSlider(labelText, defaultVal, callback, featureKey)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -6, 0, 38)
+    frame.BackgroundTransparency = 1
+    frame.Parent = scrollFrame
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 14)
+    label.BackgroundTransparency = 1
+    label.Text = " " .. labelText
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(1, -30, 0, 22)
+    sliderBg.Position = UDim2.new(0, 0, 0, 16)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(30, 30, 120)
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = frame
+    Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(0, 4)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(defaultVal / 100, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBg
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
+
+    local valLabel = Instance.new("TextLabel")
+    valLabel.Size = UDim2.new(1, 0, 1, 0)
+    valLabel.BackgroundTransparency = 1
+    valLabel.Text = tostring(defaultVal)
+    valLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    valLabel.Font = Enum.Font.SourceSansBold
+    valLabel.TextSize = 11
+    valLabel.Parent = sliderBg
+
+    sliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local function update(mousePos)
+                local relative = math.clamp((mousePos.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
+                local value = math.floor(relative * 100)
+                fill.Size = UDim2.new(relative, 0, 1, 0)
+                valLabel.Text = tostring(value)
+                cfg[featureKey] = value
+                if callback then callback(value) end
+            end
+            update(input.Position)
+            local moveConn = input.Changed:Connect(function()
+                if input.UserInputType == Enum.UserInputType.MouseMovement then update(input.Position) end
+            end)
+            local releaseConn = UserInputService.InputEnded:Connect(function(inp)
+                if inp.UserInputType == Enum.UserInputType.MouseButton1 then moveConn:Disconnect(); releaseConn:Disconnect() end
+            end)
+        end
+    end)
+
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(0, 26, 0, 22)
+    bindBtn.Position = UDim2.new(1, -26, 0, 16)
+    bindBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 100)
+    bindBtn.Text = "bind"
+    bindBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    bindBtn.Font = Enum.Font.SourceSans
+    bindBtn.TextSize = 10
+    bindBtn.BorderSizePixel = 0
+    bindBtn.Parent = frame
+    Instance.new("UICorner", bindBtn).CornerRadius = UDim.new(0, 4)
+end
+
+-- ============================================
+-- ⚙️ CORE LOGIC FUNCTIONS
+-- ============================================
+local kaConn, agConn, flyJumpConn, hbAuraConn, healthbarConn, tagConn, followConn, orbitConn, gymBanConn, freezeConn, forcefieldConn, hitTrackerConn, altDoubleKillConn, auraVisualsConn, spamNotifyConn, multiHitboxConn, autoclickerConn = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+
+-- AutoClicker Logic
+local function startAutoClicker()
+    if autoclickerConn then autoclickerConn:Disconnect() end
+    autoclickerConn = RunService.Heartbeat:Connect(function()
+        if not cfg.AutoClicker or not clickPos then return end
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(clickPos)
+        end)
+    end)
+end
+
+-- Setup AutoClicker Target (Called when toggled)
+local function setupAutoClicker()
+    isSelectingPos = true
+    local uiData = uiButtons["AutoClicker"]
+    if uiData then
+        uiData.button.Text = " " .. uiData.text .. ": CLICK WORLD"
+        uiData.button.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
+    end
+    print("[Hub] AutoClicker: Click anywhere in the game world to set the target.")
+end
+
+-- ============================================
+-- REST OF CORE LOGIC
+-- ============================================
+local function startKillAura()
+    if kaConn then kaConn:Disconnect() end
+    kaConn = RunService.Heartbeat:Connect(function()
+        if not cfg.KillAura or not HitRF then return end
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+        local nearest = nil
+        local nearDist = 50
+        for _, p in Players:GetPlayers() do
+            if p == LocalPlayer or not p.Character then continue end
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                local dist = (hrp.Position - myHRP.Position).Magnitude
+                if dist <= nearDist then
+                    nearDist = dist
+                    nearest = { hum = hum, pos = hrp.Position + hrp.CFrame.LookVector * 2 }
+                end
+            end
+        end
+        if nearest then
+            pcall(function()
+                if HitRF:IsA("RemoteFunction") then HitRF:InvokeServer(nearest.hum, Vector3.new(nearest.pos.X, nearest.pos.Y, nearest.pos.Z))
+                else HitRF:FireServer(nearest.hum, Vector3.new(nearest.pos.X, nearest.pos.Y, nearest.pos.Z)) end
+            end)
+        end
+    end)
+end
+
+local function startAutoGrab()
+    if agConn then agConn:Disconnect() end
+    agConn = RunService.Heartbeat:Connect(function()
+        if not cfg.AutoGrab or not (GrabRF or CarryRF) then return end
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+        local targetRF = GrabRF or CarryRF
+        for _, p in Players:GetPlayers() do
+            if p == LocalPlayer or not p.Character then continue end
+            local theirHRP = p.Character:FindFirstChild("HumanoidRootPart")
+            if theirHRP and (theirHRP.Position - myHRP.Position).Magnitude <= 30 then
+                pcall(function()
+                    if targetRF:IsA("RemoteFunction") then targetRF:InvokeServer(p) else targetRF:FireServer(p) end
+                end)
+                break
+            end
+        end
+    end)
+end
+
+local function startFlyJump()
+    if flyJumpConn then flyJumpConn:Disconnect() end
+    local jumpConn = LocalPlayer.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        local hu = char:FindFirstChildOfClass("Humanoid")
+        if not hu then return end
+        flyJumpConn = hu.StateChanged:Connect(function(_, newState)
+            if cfg.FlyJump and newState == Enum.HumanoidStateType.Jumping then
+                task.wait(0.1)
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local bv = Instance.new("BodyVelocity")
+                    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                    bv.Velocity = Vector3.new(0, 50, 0)
+                    bv.Parent = hrp
+                    game:GetService("Debris"):AddItem(bv, 0.5)
+                end
+            end
+        end)
+    end)
+    if LocalPlayer.Character then jumpConn:Fire(LocalPlayer.Character) end
+end
+
+local function startHitboxAura()
+    if hbAuraConn then hbAuraConn:Disconnect() end
+    hbAuraConn = RunService.Heartbeat:Connect(function()
+        if not cfg.HitboxAura then return end
+        local ch = LocalPlayer.Character
+        if not ch then return end
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
+                pcall(function()
+                    v.Size = Vector3.new(10, 10, 10)
+                    v.Transparency = 0.5
+                    v.Material = Enum.Material.Neon
+                    v.Color = Color3.fromRGB(255, 50, 50)
+                end)
+            end
+        end
+    end)
+end
+
+local function startMultiHitbox()
+    if multiHitboxConn then multiHitboxConn:Disconnect() end
+    multiHitboxConn = RunService.Heartbeat:Connect(function()
+        if not cfg.MultiHitbox then return end
+        local ch = LocalPlayer.Character
+        if not ch then return end
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
+                pcall(function()
+                    v.Size = Vector3.new(15, 15, 15)
+                    v.Transparency = 0.7
+                    v.Material = Enum.Material.Neon
+                    v.Color = Color3.fromRGB(255, 100, 0)
+                end)
+            end
+        end
+    end)
+end
+
+local function startGymBan()
+    if gymBanConn then gymBanConn:Disconnect() end
+    gymBanConn = RunService.Heartbeat:Connect(function()
+        if not cfg.GymBan then return end
+        local banList = cfg.GymBanList or ""
+        local bannedUsers = {}
+        for name in banList:gmatch("[^%s]+") do bannedUsers[name:lower()] = true end
+        for _, p in Players:GetPlayers() do
+            if p == LocalPlayer or not p.Character then continue end
+            if bannedUsers[p.Name:lower()] then
+                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    pcall(function()
+                        hrp.CFrame = CFrame.new(hrp.Position.X, 1000, hrp.Position.Z)
+                        hrp.AssemblyLinearVelocity = Vector3.new(0, -50, 0)
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+local function startFreeze()
+    if freezeConn then freezeConn:Disconnect() end
+    freezeConn = RunService.Heartbeat:Connect(function()
+        if not cfg.Freeze then return end
+        local targetName = cfg.InstaTarget or ""
+        if targetName == "" then return end
+        for _, p in Players:GetPlayers() do
+            if p.Name:lower() == targetName:lower() then
+                local hu = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+                if hu then
+                    pcall(function()
+                        hu.WalkSpeed = 0
+                        hu.JumpPower = 0
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+local function startForcefield()
+    if forcefieldConn then forcefieldConn:Disconnect() end
+    forcefieldConn = RunService.RenderStepped:Connect(function()
+        if not cfg.ForceField then return end
+        local ch = LocalPlayer.Character
+        if not ch then return end
+        if not ch:FindFirstChild("OreoForcefield") then
+            local ff = Instance.new("Part")
+            ff.Name = "OreoForcefield"
+            ff.Size = Vector3.new(6, 6, 6)
+            ff.Shape = Enum.PartType.Ball
+            ff.Material = Enum.Material.Neon
+            ff.Color = Color3.fromRGB(0, 150, 255)
+            ff.Transparency = 0.7
+            ff.CanCollide = false
+            ff.Anchored = false
+            ff.Parent = ch
+            local weld = Instance.new("Weld")
+            weld.Part0 = ch:FindFirstChild("HumanoidRootPart")
+            weld.Part1 = ff
+            weld.Parent = ff
+        end
+    end)
+end
+
+local function startAuraVisuals()
+    if auraVisualsConn then auraVisualsConn:Disconnect() end
+    auraVisualsConn = RunService.RenderStepped:Connect(function()
+        if not cfg.AuraVisuals then return end
+        local ch = LocalPlayer.Character
+        if not ch then return end
+        local hrp = ch:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        if not hrp:FindFirstChild("OreoAura") then
+            local aura = Instance.new("Part")
+            aura.Name = "OreoAura"
+            aura.Size = Vector3.new(8, 8, 8)
+            aura.Shape = Enum.PartType.Ball
+            aura.Material = Enum.Material.Neon
+            aura.Color = Color3.fromRGB(255, 0, 255)
+            aura.Transparency = 0.8
+            aura.CanCollide = false
+            aura.Anchored = false
+            aura.Parent = hrp
+            local weld = Instance.new("Weld")
+            weld.Part0 = hrp
+            weld.Part1 = aura
+            weld.Parent = aura
+        end
+    end)
+end
+
+-- ============================================
+-- 📋 POPULATE UI
+-- ============================================
+
+-- Combat
+createToggle("kill aura", false, function(v) if v then startKillAura() else if kaConn then kaConn:Disconnect() end end end, "KillAura")
+createToggle("auto block", false, function(v) end, "AutoBlock")
+createToggle("anti ragdoll", false, function(v) end, "AntiRagdoll")
+createToggle("death tp", false, function(v) end, "DeathTp")
+createToggle("no slow", false, function(v) end, "NoSlow")
+createToggle("anti grab", false, function(v) end, "AntiGrab")
+createToggle("auto grab", false, function(v) if v then startAutoGrab() else if agConn then agConn:Disconnect() end end end, "AutoGrab")
+createToggle("spam notify", false, function(v) end, "SpamNotify")
+createTextbox("custom message", "type here...", function(v) end, "CustomMsg")
+createToggle("healthbars", false, function(v) end, "Healthbars")
+createToggle("tpwalk", false, function(v) end, "TpWalk")
+createToggle("no prompts", false, function(v) end, "PromptDelete")
+createToggle("auto decline", false, function(v) end, "AutoDecline")
+createToggle("anti lag", false, function(v) end, "AntiLag")
+createToggle("hit tracker", false, function(v) end, "HitTracker")
+
+-- Friends / Targets
+createTextbox("friends list", "username here", function(v) end, "FriendsList")
+createToggle("friend tag", false, function(v) end, "FriendTag")
+createTextbox("targets list", "username here", function(v) end, "TargetsList")
+createToggle("target tag", false, function(v) end, "TargetTag")
+
+-- Follow / Orbit
+createTextbox("follow player", "username here", function(v) end, "FollowTarget")
+createToggle("follow", false, function(v) end, "Follow")
+createToggle("orbit", false, function(v) end, "Orbit")
+createSlider("dist speed", 50, function(v) end, "DistSpeed")
+
+-- Misc
+createToggle("hitbox aura", false, function(v) if v then startHitboxAura() else if hbAuraConn then hbAuraConn:Disconnect() end end end, "HitboxAura")
+createToggle("multi-hitbox", false, function(v) if v then startMultiHitbox() else if multiHitboxConn then multiHitboxConn:Disconnect() end end end, "MultiHitbox")
+createToggle("flyjump", false, function(v) if v then startFlyJump() else if flyJumpConn then flyJumpConn:Disconnect() end end end, "FlyJump")
+
+-- Custom AutoClicker Hook
+createToggle("autoclicker", false, function(v) 
+    if v then 
+        if clickPos then 
+            startAutoClicker() 
+        else 
+            setupAutoClicker() 
+        end
+    else 
+        if autoclickerConn then autoclickerConn:Disconnect() end 
+    end 
+end, "AutoClicker")
+
+createToggle("alt double kill", false, function(v) end, "AltDoubleKill")
+createToggle("one user only", false, function(v) end, "OneUserOnly")
+createToggle("auto bring att", false, function(v) end, "AutoBringAtt")
+
+-- Gym Ban
+createTextbox("gym ban", "users separated by space", function(v) end, "GymBanList")
+createToggle("gym ban", false, function(v) if v then startGymBan() else if gymBanConn then gymBanConn:Disconnect() end end end, "GymBan")
+createTextbox("insta", "username here", function(v) end, "InstaTarget")
+createToggle("nearest", false, function(v) end, "Nearest")
+createTextbox("bring", "username here", function(v) end, "BringTarget")
+
+-- Final
+createToggle("no hit anims", false, function(v) end, "NoHitAnims")
+createToggle("aura visuals", false, function(v) if v then startAuraVisuals() else if auraVisualsConn then auraVisualsConn:Disconnect() end end end, "AuraVisuals")
+createToggle("new aura", false, function(v) end, "NewAura")
+createToggle("freeze", false, function(v) if v then startFreeze() else if freezeConn then freezeConn:Disconnect() end end end, "Freeze")
+createToggle("antivoid", false, function(v) end, "AntiVoid")
+createToggle("forcefield", false, function(v) if v then startForcefield() else if forcefieldConn then forcefieldConn:Disconnect() end end end, "ForceField")
+createToggle("visible", false, function(v) end, "Visible")
+createToggle("invisible", false, function(v) end, "Invisible")
+
+-- ✅ Set CanvasSize AFTER all items are added
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
+end)
+
+-- ============================================
+-- 🔄 GLOBAL HEARTBEAT LOOPS
+-- ============================================
+RunService.Heartbeat:Connect(function()
+    local ch = LocalPlayer.Character
+    if not ch then return end
+    local hu = ch:FindFirstChildOfClass("Humanoid")
+    local hrp = ch:FindFirstChild("HumanoidRootPart")
+
+    if cfg.AntiRagdoll and hu then
+        pcall(function() hu:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false) end)
+        hu.PlatformStand = false
+    end
+
+    if cfg.NoSlow and hu then
+        hu.WalkSpeed = 50
+        hu.JumpPower = 50
+    end
+
+    if cfg.AntiVoid and hrp and hrp.Position.Y < -260 then
+        hrp.CFrame = CFrame.new(hrp.Position.X, 50, hrp.Position.Z)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    if cfg.AntiGrab then
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("Motor6D") or v:IsA("Weld") then
+                local p0Mine = v.Part0 and v.Part0:IsDescendantOf(ch)
+                local p1Mine = v.Part1 and v.Part1:IsDescendantOf(ch)
+                if (p0Mine and not p1Mine) or (p1Mine and not p0Mine) then v:Destroy() end
+            end
+        end
+    end
+
+    if cfg.Invisible then
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("BasePart") then v.Transparency = 1 end
+        end
+    elseif cfg.Visible then
+        for _, v in ipairs(ch:GetDescendants()) do
+            if v:IsA("BasePart") then v.Transparency = 0 end
+        end
+    end
+end)
+
+-- ============================================
+-- 🔽 MINIMIZE / CLOSE
+-- ============================================
+local isMinimized = false
+local fullSize = UDim2.new(0, 420, 0, 650)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        scrollFrame.Visible = false
+        mainFrame.Size = UDim2.new(0, 420, 0, 30)
+        minimizeBtn.Text = "☐"
+    else
+        scrollFrame.Visible = true
+        mainFrame.Size = fullSize
+        minimizeBtn.Text = "−"
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    local loops = {kaConn, agConn, flyJumpConn, hbAuraConn, healthbarConn, tagConn, followConn, orbitConn, gymBanConn, freezeConn, forcefieldConn, hitTrackerConn, altDoubleKillConn, auraVisualsConn, spamNotifyConn, multiHitboxConn, autoclickerConn}
+    for _, c in ipairs(loops) do if c then pcall(function() c:Disconnect() end) end end
+    pcall(function() gui:Destroy() end)
+    print("[Hub] GUI destroyed")
+end)
+
+-- ============================================
+-- ⌨️ UNIVERSAL KEYBIND LISTENER & AUTO CLICK CAPTURE
+-- ============================================
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    
+    -- AutoClicker Selection (Wait for click outside GUI)
+    if isSelectingPos and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        clickPos = input.Position
+        isSelectingPos = false
+        cfg.AutoClicker = true
+        
+        -- Update UI
+        if uiButtons["AutoClicker"] then
+            uiButtons["AutoClicker"].button.Text = " AutoClicker: ON"
+            uiButtons["AutoClicker"].button.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        end
+        
+        startAutoClicker()
+        print("[Hub] AutoClicker locked to position: " .. tostring(clickPos))
+        return
+    end
+
+    -- Normal Keybinds
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        for featureKey, keyCode in pairs(bindings) do
+            if input.KeyCode == keyCode then
+                
+                cfg[featureKey] = not cfg[featureKey]
+                
+                if uiButtons[featureKey] then
+                    local uiData = uiButtons[featureKey]
+                    uiData.button.Text = " " .. uiData.text .. ": " .. (cfg[featureKey] and "ON" or "OFF")
+                    uiData.button.BackgroundColor3 = cfg[featureKey] and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(30, 30, 120)
+                end
+
+                if featureKey == "KillAura" then 
+                    if cfg.KillAura then startKillAura() else if kaConn then kaConn:Disconnect() end end
+                elseif featureKey == "AutoGrab" then
+                    if cfg.AutoGrab then startAutoGrab() else if agConn then agConn:Disconnect() end end
+                elseif featureKey == "AutoClicker" then
+                    if cfg.AutoClicker then 
+                        if clickPos then startAutoClicker() else setupAutoClicker() end
+                    else 
+                        if autoclickerConn then autoclickerConn:Disconnect() end 
+                    end
+                elseif featureKey == "FlyJump" then
+                    if cfg.FlyJump then startFlyJump() else if flyJumpConn then flyJumpConn:Disconnect() end end
+                elseif featureKey == "HitboxAura" then
+                    if cfg.HitboxAura then startHitboxAura() else if hbAuraConn then hbAuraConn:Disconnect() end end
+                elseif featureKey == "MultiHitbox" then
+                    if cfg.MultiHitbox then startMultiHitbox() else if multiHitboxConn then multiHitboxConn:Disconnect() end end
+                elseif featureKey == "GymBan" then
+                    if cfg.GymBan then startGymBan() else if gymBanConn then gymBanConn:Disconnect() end end
+                elseif featureKey == "Freeze" then
+                    if cfg.Freeze then startFreeze() else if freezeConn then freezeConn:Disconnect() end end
+                elseif featureKey == "ForceField" then
+                    if cfg.ForceField then startForcefield() else if forcefieldConn then forcefieldConn:Disconnect() end end
+                elseif featureKey == "AuraVisuals" then
+                    if cfg.AuraVisuals then startAuraVisuals() else if auraVisualsConn then auraVisualsConn:Disconnect() end end
+                end
+                
+                print("[Bind] Toggled " .. featureKey .. " -> " .. (cfg[featureKey] and "ON" or "OFF"))
+            end
+        end
+    end
+end)
+
+print("✅ BR Angelicious (Remastered By Oreo) - Fully Fixed!")
