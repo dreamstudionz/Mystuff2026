@@ -1,1 +1,992 @@
+-- ============================================
+-- 🎯 HUS GRAB SYSTEM 🇵🇭 🇵🇰 🇮🇳 — v9
+-- Main GUI + Fully Moveable Floating TP Grab Button
+-- ============================================
 
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+-- ============================================
+-- ⚙️ CONFIG
+-- ============================================
+local CONFIG = {
+    GrabDistance = 3,
+    GrabSpamCount = 10,
+    GrabSpamDelay = 0.02,
+    FaceLockTime = 0.3,
+}
+
+-- ============================================
+-- 🔍 AUTO-DETECT GRAB REMOTE
+-- ============================================
+local GrabRF = nil
+
+local function findGrabRemote()
+    for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+        if (d:IsA("RemoteEvent") or d:IsA("RemoteFunction")) then
+            if d.Name:lower() == "grab" then return d end
+        end
+    end
+    for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+        if (d:IsA("RemoteEvent") or d:IsA("RemoteFunction")) then
+            local n = d.Name:lower()
+            if n:find("grab") and not n:find("ungrab") and not n:find("release") and not n:find("drop") then
+                return d
+            end
+        end
+    end
+    return nil
+end
+
+GrabRF = findGrabRemote()
+print("[HUS] GrabRF =", GrabRF and (GrabRF:GetFullName() .. " [" .. GrabRF.ClassName .. "]") or "NOT FOUND")
+
+-- ============================================
+-- 🔎 FIND PLAYER
+-- ============================================
+local function findPlayerByName(name)
+    if not name or name == "" then return nil end
+    name = name:lower()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and (p.Name:lower() == name or p.DisplayName:lower() == name) then
+            return p
+        end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and (p.Name:lower():find(name, 1, true) or p.DisplayName:lower():find(name, 1, true)) then
+            return p
+        end
+    end
+    return nil
+end
+
+-- ============================================
+-- 🔥 FIRE GRAB
+-- ============================================
+local function fireGrab(target)
+    if not GrabRF or not target then return end
+    pcall(function()
+        if GrabRF:IsA("RemoteFunction") then
+            GrabRF:InvokeServer(target)
+        else
+            GrabRF:FireServer(target)
+        end
+    end)
+end
+
+-- ============================================
+-- 🚀 TELEPORT + GRAB
+-- ============================================
+local function teleportAndGrab(targetPlayer)
+    if not targetPlayer then warn("[HUS] Target is nil") return false end
+    if not GrabRF then warn("[HUS] Grab remote not found") return false end
+
+    local targetChar = targetPlayer.Character
+    if not targetChar then warn("[HUS] Target has no character") return false end
+
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHu = targetChar:FindFirstChildOfClass("Humanoid")
+    if not targetHRP or not targetHu or targetHu.Health <= 0 then
+        warn("[HUS] Target dead / no HRP") return false
+    end
+
+    local myChar = LocalPlayer.Character
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHu = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    if not myHRP then warn("[HUS] You have no character") return false end
+
+    local frontPos = targetHRP.CFrame * CFrame.new(0, 0, CONFIG.GrabDistance)
+    myHRP.CFrame = CFrame.new(frontPos.Position, targetHRP.Position)
+    if myHu then myHu.AutoRotate = false end
+
+    for i = 1, CONFIG.GrabSpamCount do
+        fireGrab(targetPlayer)
+        task.wait(CONFIG.GrabSpamDelay)
+    end
+
+    local startTime = tick()
+    while tick() - startTime < CONFIG.FaceLockTime do
+        if targetHRP.Parent and myHRP.Parent then
+            myHRP.CFrame = CFrame.new(myHRP.Position, targetHRP.Position)
+        end
+        RunService.RenderStepped:Wait()
+    end
+
+    if myHu then myHu.AutoRotate = true end
+    print("[HUS] Grabbed", targetPlayer.Name)
+    return true
+end
+
+-- ============================================
+-- 🔁 SPAM STATE
+-- ============================================
+local spamActive = false
+local spamConn = nil
+local spamTargetName = ""
+
+local function stopSpam()
+    spamActive = false
+    if spamConn then spamConn:Disconnect(); spamConn = nil end
+    print("[HUS] Spam grab STOPPED")
+end
+
+local function startSpam(name)
+    stopSpam()
+    if name == "" then return false end
+    spamTargetName = name
+    spamActive = true
+    print("[HUS] Spam grab STARTED on:", name)
+
+    spamConn = RunService.Heartbeat:Connect(function()
+        if not spamActive then return end
+        local target = findPlayerByName(spamTargetName)
+        if not target or not target.Character then return end
+        local hu = target.Character:FindFirstChildOfClass("Humanoid")
+        if not hu or hu.Health <= 0 then return end
+        fireGrab(target)
+    end)
+    return true
+end
+
+-- ============================================
+-- ⌨️ KEYBINDS
+-- ============================================
+local keybinds = { spam = nil, tp = nil }
+local capturingFor = nil
+local CAPTURE_ACTION = "HUS_GrabSystem_Capture"
+local ACTIONS = {
+    spam = "HUS_GrabSystem_SpamAction",
+    tp   = "HUS_GrabSystem_TPAction",
+}
+
+local spamKeyBtn, tpKeyBtn, spamBtn, resultLabel, inputBox
+
+local function refreshKeyBtn(which)
+    local btn = (which == "spam") and spamKeyBtn or tpKeyBtn
+    local bind = keybinds[which]
+    if not btn then return end
+    if bind then
+        btn.Text = bind.Name
+        btn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    else
+        btn.Text = "KEY"
+        btn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+    end
+end
+
+local function unbindAction(which)
+    if ACTIONS[which] then
+        pcall(function() ContextActionService:UnbindAction(ACTIONS[which]) end)
+    end
+end
+
+local function bindAction(which, key)
+    unbindAction(which)
+    keybinds[which] = key
+
+    ContextActionService:BindActionAtPriority(
+        ACTIONS[which],
+        function(_, state)
+            if state ~= Enum.UserInputState.Begin then
+                return Enum.ContextActionResult.Pass
+            end
+
+            if which == "spam" then
+                if spamActive then
+                    stopSpam()
+                    if spamBtn then
+                        spamBtn.Text = "OFF"
+                        spamBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+                    end
+                    if resultLabel then
+                        resultLabel.Text = "🔁 Spam grab stopped (keybind)"
+                        resultLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+                    end
+                else
+                    local name = inputBox and inputBox.Text or ""
+                    if name == "" then
+                        if resultLabel then
+                            resultLabel.Text = "⚠️ Enter a username first"
+                            resultLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+                        end
+                        return Enum.ContextActionResult.Sink
+                    end
+                    local target = findPlayerByName(name)
+                    if not target then
+                        if resultLabel then
+                            resultLabel.Text = "❌ Player not found: " .. name
+                            resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+                        end
+                        return Enum.ContextActionResult.Sink
+                    end
+                    startSpam(name)
+                    if spamBtn then
+                        spamBtn.Text = "ON"
+                        spamBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+                    end
+                    if resultLabel then
+                        resultLabel.Text = "🔁 Spam grabbing " .. target.Name .. " (keybind)"
+                        resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    end
+                end
+                return Enum.ContextActionResult.Sink
+            end
+
+            if which == "tp" then
+                local name = inputBox and inputBox.Text or ""
+                if name == "" then
+                    if resultLabel then
+                        resultLabel.Text = "⚠️ Enter a username first"
+                        resultLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+                    end
+                    return Enum.ContextActionResult.Sink
+                end
+                local target = findPlayerByName(name)
+                if not target then
+                    if resultLabel then
+                        resultLabel.Text = "❌ Player not found: " .. name
+                        resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+                    end
+                    return Enum.ContextActionResult.Sink
+                end
+                if resultLabel then
+                    resultLabel.Text = "🔄 Grabbing " .. target.Name .. " (keybind)..."
+                    resultLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+                end
+                task.spawn(function()
+                    local ok = teleportAndGrab(target)
+                    if resultLabel then
+                        if ok then
+                            resultLabel.Text = "✅ Grabbed " .. target.Name .. " (keybind)"
+                            resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                        else
+                            resultLabel.Text = "❌ Grab failed — check output"
+                            resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+                        end
+                    end
+                end)
+                return Enum.ContextActionResult.Sink
+            end
+
+            return Enum.ContextActionResult.Pass
+        end,
+        false,
+        4000,
+        key
+    )
+    print("[HUS] Bound", key.Name, "→", which)
+end
+
+local function beginCapture(which)
+    pcall(function() ContextActionService:UnbindAction(CAPTURE_ACTION) end)
+    capturingFor = which
+
+    local btn = (which == "spam") and spamKeyBtn or tpKeyBtn
+    if btn then
+        btn.Text = "PRESS KEY..."
+        btn.BackgroundColor3 = Color3.fromRGB(255, 180, 0)
+    end
+
+    local allKeys = {}
+    for _, kc in ipairs(Enum.KeyCode:GetEnumItems()) do
+        table.insert(allKeys, kc)
+    end
+
+    ContextActionService:BindActionAtPriority(
+        CAPTURE_ACTION,
+        function(_, state, input)
+            if state ~= Enum.UserInputState.Begin then
+                return Enum.ContextActionResult.Pass
+            end
+            local key = input.KeyCode
+            if key == Enum.KeyCode.Unknown then
+                return Enum.ContextActionResult.Pass
+            end
+
+            if key == Enum.KeyCode.Escape then
+                capturingFor = nil
+                pcall(function() ContextActionService:UnbindAction(CAPTURE_ACTION) end)
+                refreshKeyBtn(which)
+                if resultLabel then
+                    resultLabel.Text = "⌨️ Keybind cancelled"
+                    resultLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+                end
+                return Enum.ContextActionResult.Sink
+            end
+
+            bindAction(which, key)
+            capturingFor = nil
+            pcall(function() ContextActionService:UnbindAction(CAPTURE_ACTION) end)
+            refreshKeyBtn(which)
+            if resultLabel then
+                resultLabel.Text = "⌨️ Bound " .. key.Name .. " to " .. which
+                resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            end
+            return Enum.ContextActionResult.Sink
+        end,
+        false,
+        9999,
+        table.unpack(allKeys)
+    )
+end
+
+-- ============================================
+-- 🖼️ MAIN GUI
+-- ============================================
+local gui = Instance.new("ScreenGui")
+gui.Name = "HUSGrabSystem"
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 360, 0, 280)
+frame.Position = UDim2.new(0.5, -180, 0.5, -140)
+frame.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(160, 100, 255)
+stroke.Thickness = 1.5
+stroke.Parent = frame
+
+-- ── Title bar ──────────────────────────────
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -110, 0, 28)
+title.Position = UDim2.new(0, 10, 0, 8)
+title.BackgroundTransparency = 1
+title.Text = "HUS Grab System 🇵🇭 🇵🇰 🇮🇳"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 15
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = frame
+
+-- ── Minimize button ────────────────────────
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 26, 0, 26)
+minimizeBtn.Position = UDim2.new(1, -64, 0, 9)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 45, 90)
+minimizeBtn.Text = "−"
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 18
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = frame
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 5)
+
+-- ── Close button ───────────────────────────
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -34, 0, 9)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = frame
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
+
+-- ── Content container ──────────────────────
+local content = Instance.new("Frame")
+content.Name = "Content"
+content.Size = UDim2.new(1, 0, 1, -44)
+content.Position = UDim2.new(0, 0, 0, 44)
+content.BackgroundTransparency = 1
+content.Parent = frame
+
+-- Status
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 18)
+status.Position = UDim2.new(0, 10, 0, -6)
+status.BackgroundTransparency = 1
+status.Text = GrabRF and ("Remote: " .. GrabRF.Name) or "❌ Grab remote NOT found"
+status.TextColor3 = GrabRF and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 80, 80)
+status.Font = Enum.Font.Gotham
+status.TextSize = 11
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = content
+
+-- Username input
+inputBox = Instance.new("TextBox")
+inputBox.Size = UDim2.new(1, -50, 0, 36)
+inputBox.Position = UDim2.new(0, 10, 0, 18)
+inputBox.BackgroundColor3 = Color3.fromRGB(45, 35, 65)
+inputBox.PlaceholderText = "Click to pick a player..."
+inputBox.PlaceholderColor3 = Color3.fromRGB(140, 130, 160)
+inputBox.Text = ""
+inputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+inputBox.Font = Enum.Font.Gotham
+inputBox.TextSize = 14
+inputBox.ClearTextOnFocus = false
+inputBox.Parent = content
+Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 6)
+
+-- Dropdown arrow
+local dropdownBtn = Instance.new("TextButton")
+dropdownBtn.Size = UDim2.new(0, 32, 0, 36)
+dropdownBtn.Position = UDim2.new(1, -42, 0, 18)
+dropdownBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+dropdownBtn.Text = "▼"
+dropdownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+dropdownBtn.Font = Enum.Font.GothamBold
+dropdownBtn.TextSize = 14
+dropdownBtn.BorderSizePixel = 0
+dropdownBtn.Parent = content
+Instance.new("UICorner", dropdownBtn).CornerRadius = UDim.new(0, 6)
+
+-- ============================================
+-- 📋 PLAYER DROPDOWN
+-- ============================================
+local dropdown = Instance.new("ScrollingFrame")
+dropdown.Name = "PlayerDropdown"
+dropdown.Size = UDim2.new(1, -20, 0, 0)
+dropdown.Position = UDim2.new(0, 10, 0, 58)
+dropdown.BackgroundColor3 = Color3.fromRGB(35, 28, 50)
+dropdown.BorderSizePixel = 0
+dropdown.Visible = false
+dropdown.ZIndex = 20
+dropdown.CanvasSize = UDim2.new(0, 0, 0, 0)
+dropdown.ScrollBarThickness = 4
+dropdown.ScrollBarImageColor3 = Color3.fromRGB(160, 100, 255)
+dropdown.Parent = content
+Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 6)
+
+local dropdownStroke = Instance.new("UIStroke")
+dropdownStroke.Color = Color3.fromRGB(160, 100, 255)
+dropdownStroke.Thickness = 1
+dropdownStroke.Transparency = 0.3
+dropdownStroke.Parent = dropdown
+
+local dropdownLayout = Instance.new("UIListLayout")
+dropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
+dropdownLayout.Padding = UDim.new(0, 2)
+dropdownLayout.Parent = dropdown
+
+local dropdownPad = Instance.new("UIPadding")
+dropdownPad.PaddingTop = UDim.new(0, 4)
+dropdownPad.PaddingBottom = UDim.new(0, 4)
+dropdownPad.PaddingLeft = UDim.new(0, 4)
+dropdownPad.PaddingRight = UDim.new(0, 4)
+dropdownPad.Parent = dropdown
+
+local function closeDropdown()
+    dropdown.Visible = false
+    dropdown.Size = UDim2.new(1, -20, 0, 0)
+    dropdownBtn.Text = "▼"
+end
+
+local function populateDropdown()
+    for _, child in ipairs(dropdown:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local others = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(others, p)
+        end
+    end
+    table.sort(others, function(a, b) return a.Name:lower() < b.Name:lower() end)
+
+    local ROW_H = 28
+    local MAX_ROWS = 6
+    local rows = math.min(#others, MAX_ROWS)
+
+    if #others == 0 then
+        local empty = Instance.new("TextButton")
+        empty.Size = UDim2.new(1, -8, 0, ROW_H)
+        empty.BackgroundColor3 = Color3.fromRGB(45, 35, 65)
+        empty.Text = "No other players in server"
+        empty.TextColor3 = Color3.fromRGB(140, 130, 160)
+        empty.Font = Enum.Font.Gotham
+        empty.TextSize = 12
+        empty.BorderSizePixel = 0
+        empty.ZIndex = 21
+        empty.Parent = dropdown
+        Instance.new("UICorner", empty).CornerRadius = UDim.new(0, 4)
+        dropdown.CanvasSize = UDim2.new(0, 0, 0, ROW_H + 8)
+        dropdown.Size = UDim2.new(1, -20, 0, ROW_H + 16)
+        return
+    end
+
+    for i, p in ipairs(others) do
+        local row = Instance.new("TextButton")
+        row.Size = UDim2.new(1, -8, 0, ROW_H)
+        row.BackgroundColor3 = Color3.fromRGB(50, 40, 72)
+        row.Text = "  " .. p.Name .. "  ·  " .. p.DisplayName
+        row.TextColor3 = Color3.fromRGB(230, 225, 245)
+        row.Font = Enum.Font.Gotham
+        row.TextSize = 12
+        row.TextXAlignment = Enum.TextXAlignment.Left
+        row.BorderSizePixel = 0
+        row.ZIndex = 21
+        row.LayoutOrder = i
+        row.Parent = dropdown
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+
+        row.MouseEnter:Connect(function() row.BackgroundColor3 = Color3.fromRGB(80, 60, 110) end)
+        row.MouseLeave:Connect(function() row.BackgroundColor3 = Color3.fromRGB(50, 40, 72) end)
+
+        row.MouseButton1Click:Connect(function()
+            inputBox.Text = p.Name
+            closeDropdown()
+            if resultLabel then
+                resultLabel.Text = "👤 Selected: " .. p.Name
+                resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            end
+        end)
+    end
+
+    dropdown.CanvasSize = UDim2.new(0, 0, 0, rows * (ROW_H + 2) + 8)
+    dropdown.Size = UDim2.new(1, -20, 0, rows * (ROW_H + 2) + 16)
+end
+
+local function toggleDropdown()
+    if dropdown.Visible then closeDropdown(); return end
+    populateDropdown()
+    dropdown.Visible = true
+    dropdownBtn.Text = "▲"
+end
+
+inputBox.Focused:Connect(toggleDropdown)
+dropdownBtn.MouseButton1Click:Connect(toggleDropdown)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if dropdown.Visible and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mouse = UserInputService:GetMouseLocation()
+        local guiPos = frame.AbsolutePosition
+        local guiSize = frame.AbsoluteSize
+        local inside = mouse.X >= guiPos.X and mouse.X <= guiPos.X + guiSize.X
+                   and mouse.Y >= guiPos.Y and mouse.Y <= guiPos.Y + guiSize.Y
+        if not inside then closeDropdown() end
+    end
+end)
+
+Players.PlayerAdded:Connect(function() if dropdown.Visible then populateDropdown() end end)
+Players.PlayerRemoving:Connect(function() if dropdown.Visible then populateDropdown() end end)
+
+-- ============================================
+-- 🔁 SPAM SECTION
+-- ============================================
+local spamSection = Instance.new("Frame")
+spamSection.Size = UDim2.new(1, -20, 0, 56)
+spamSection.Position = UDim2.new(0, 10, 0, 62)
+spamSection.BackgroundColor3 = Color3.fromRGB(40, 30, 58)
+spamSection.BorderSizePixel = 0
+spamSection.Parent = content
+Instance.new("UICorner", spamSection).CornerRadius = UDim.new(0, 6)
+
+local spamLabel = Instance.new("TextLabel")
+spamLabel.Size = UDim2.new(1, -180, 1, 0)
+spamLabel.Position = UDim2.new(0, 10, 0, 0)
+spamLabel.BackgroundTransparency = 1
+spamLabel.Text = "🔁 Spam Grab"
+spamLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+spamLabel.Font = Enum.Font.GothamBold
+spamLabel.TextSize = 13
+spamLabel.TextXAlignment = Enum.TextXAlignment.Left
+spamLabel.Parent = spamSection
+
+spamBtn = Instance.new("TextButton")
+spamBtn.Size = UDim2.new(0, 70, 0, 32)
+spamBtn.Position = UDim2.new(1, -155, 0.5, -16)
+spamBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+spamBtn.Text = "OFF"
+spamBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spamBtn.Font = Enum.Font.GothamBold
+spamBtn.TextSize = 13
+spamBtn.BorderSizePixel = 0
+spamBtn.Parent = spamSection
+Instance.new("UICorner", spamBtn).CornerRadius = UDim.new(0, 6)
+
+spamKeyBtn = Instance.new("TextButton")
+spamKeyBtn.Size = UDim2.new(0, 70, 0, 32)
+spamKeyBtn.Position = UDim2.new(1, -78, 0.5, -16)
+spamKeyBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+spamKeyBtn.Text = "KEY"
+spamKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spamKeyBtn.Font = Enum.Font.GothamBold
+spamKeyBtn.TextSize = 12
+spamKeyBtn.BorderSizePixel = 0
+spamKeyBtn.Parent = spamSection
+Instance.new("UICorner", spamKeyBtn).CornerRadius = UDim.new(0, 6)
+
+-- ============================================
+-- 🚀 TP SECTION
+-- ============================================
+local tpSection = Instance.new("Frame")
+tpSection.Size = UDim2.new(1, -20, 0, 40)
+tpSection.Position = UDim2.new(0, 10, 0, 126)
+tpSection.BackgroundTransparency = 1
+tpSection.Parent = content
+
+local grabBtn = Instance.new("TextButton")
+grabBtn.Size = UDim2.new(1, -80, 1, 0)
+grabBtn.Position = UDim2.new(0, 0, 0, 0)
+grabBtn.BackgroundColor3 = Color3.fromRGB(160, 100, 255)
+grabBtn.Text = "🚀 TELEPORT & GRAB"
+grabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+grabBtn.Font = Enum.Font.GothamBold
+grabBtn.TextSize = 13
+grabBtn.BorderSizePixel = 0
+grabBtn.Parent = tpSection
+Instance.new("UICorner", grabBtn).CornerRadius = UDim.new(0, 6)
+
+tpKeyBtn = Instance.new("TextButton")
+tpKeyBtn.Size = UDim2.new(0, 70, 1, 0)
+tpKeyBtn.Position = UDim2.new(1, -70, 0, 0)
+tpKeyBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+tpKeyBtn.Text = "KEY"
+tpKeyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpKeyBtn.Font = Enum.Font.GothamBold
+tpKeyBtn.TextSize = 12
+tpKeyBtn.BorderSizePixel = 0
+tpKeyBtn.Parent = tpSection
+Instance.new("UICorner", tpKeyBtn).CornerRadius = UDim.new(0, 6)
+
+-- Result label
+resultLabel = Instance.new("TextLabel")
+resultLabel.Size = UDim2.new(1, -20, 0, 20)
+resultLabel.Position = UDim2.new(0, 10, 0, 174)
+resultLabel.BackgroundTransparency = 1
+resultLabel.Text = ""
+resultLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+resultLabel.Font = Enum.Font.Gotham
+resultLabel.TextSize = 11
+resultLabel.TextXAlignment = Enum.TextXAlignment.Left
+resultLabel.Parent = content
+
+local hintLabel = Instance.new("TextLabel")
+hintLabel.Size = UDim2.new(1, -20, 0, 18)
+hintLabel.Position = UDim2.new(0, 10, 0, 198)
+hintLabel.BackgroundTransparency = 1
+hintLabel.Text = "💡 Click username to pick • KEY buttons bind • − minimize • ✕ close"
+hintLabel.TextColor3 = Color3.fromRGB(150, 140, 180)
+hintLabel.Font = Enum.Font.Gotham
+hintLabel.TextSize = 10
+hintLabel.TextXAlignment = Enum.TextXAlignment.Left
+hintLabel.Parent = content
+
+-- ============================================
+-- 🔽 MINIMIZE / CLOSE
+-- ============================================
+local isMinimized = false
+local fullSize = UDim2.new(0, 360, 0, 280)
+
+local function minimize()
+    isMinimized = not isMinimized
+    if isMinimized then
+        content.Visible = false
+        frame.Size = UDim2.new(0, 360, 0, 44)
+        closeDropdown()
+        minimizeBtn.Text = "☐"
+    else
+        content.Visible = true
+        frame.Size = fullSize
+        minimizeBtn.Text = "−"
+    end
+end
+
+local function destroyGui()
+    print("[HUS] Closing GUI...")
+    stopSpam()
+    if capturingFor then
+        capturingFor = nil
+        pcall(function() ContextActionService:UnbindAction(CAPTURE_ACTION) end)
+    end
+    unbindAction("spam")
+    unbindAction("tp")
+    pcall(function() gui:Destroy() end)
+    if _G.HUS_FloatingTP then
+        pcall(function() _G.HUS_FloatingTP:Destroy() end)
+        _G.HUS_FloatingTP = nil
+    end
+    print("[HUS] GUI destroyed")
+end
+
+minimizeBtn.MouseButton1Click:Connect(minimize)
+closeBtn.MouseButton1Click:Connect(destroyGui)
+
+-- ============================================
+-- 🖱️ DRAG (main)
+-- ============================================
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+local function dragStartFn(input)
+    dragging = true
+    dragStart = input.Position
+    startPos = frame.Position
+end
+local function dragMoveFn(input)
+    if not dragging then return end
+    local delta = input.Position - dragStart
+    frame.Position = UDim2.new(
+        startPos.X.Scale, startPos.X.Offset + delta.X,
+        startPos.Y.Scale, startPos.Y.Offset + delta.Y
+    )
+end
+local function dragEndFn() dragging = false end
+
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        local mouse = UserInputService:GetMouseLocation()
+        local mpos = minimizeBtn.AbsolutePosition
+        local msize = minimizeBtn.AbsoluteSize
+        local cpos = closeBtn.AbsolutePosition
+        local csize = closeBtn.AbsoluteSize
+        local overMin = mouse.X >= mpos.X and mouse.X <= mpos.X + msize.X
+                    and mouse.Y >= mpos.Y and mouse.Y <= mpos.Y + msize.Y
+        local overClose = mouse.X >= cpos.X and mouse.X <= cpos.X + csize.X
+                       and mouse.Y >= cpos.Y and mouse.Y <= cpos.Y + csize.Y
+        if overMin or overClose then return end
+        dragStartFn(input)
+    end
+end)
+
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then dragMoveFn(input) end
+end)
+title.InputEnded:Connect(dragEndFn)
+
+for _, obj in ipairs({status, resultLabel, hintLabel, spamLabel}) do
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then dragStartFn(input) end
+    end)
+    obj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then dragMoveFn(input) end
+    end)
+    obj.InputEnded:Connect(dragEndFn)
+end
+
+-- ============================================
+-- 🖱️ MAIN BUTTON HANDLERS
+-- ============================================
+spamBtn.MouseButton1Click:Connect(function()
+    if spamActive then
+        stopSpam()
+        spamBtn.Text = "OFF"
+        spamBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+        resultLabel.Text = "🔁 Spam grab stopped"
+        resultLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    else
+        local name = inputBox.Text
+        if name == "" then
+            resultLabel.Text = "⚠️ Enter a username first"
+            resultLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+            return
+        end
+        local target = findPlayerByName(name)
+        if not target then
+            resultLabel.Text = "❌ Player not found: " .. name
+            resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+            return
+        end
+        startSpam(name)
+        spamBtn.Text = "ON"
+        spamBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+        resultLabel.Text = "🔁 Spam grabbing " .. target.Name
+        resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    end
+end)
+
+spamKeyBtn.MouseButton1Click:Connect(function() beginCapture("spam") end)
+tpKeyBtn.MouseButton1Click:Connect(function() beginCapture("tp") end)
+
+grabBtn.MouseButton1Click:Connect(function()
+    local name = inputBox.Text
+    if name == "" then
+        resultLabel.Text = "⚠️ Enter a username first"
+        resultLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        return
+    end
+    local target = findPlayerByName(name)
+    if not target then
+        resultLabel.Text = "❌ Player not found: " .. name
+        resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        return
+    end
+    resultLabel.Text = "🔄 Grabbing " .. target.Name .. "..."
+    resultLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    task.spawn(function()
+        local ok = teleportAndGrab(target)
+        if ok then
+            resultLabel.Text = "✅ Grabbed " .. target.Name
+            resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            resultLabel.Text = "❌ Grab failed — check output"
+            resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        end
+    end)
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if spamActive then
+        stopSpam()
+        spamBtn.Text = "OFF"
+        spamBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 110)
+    end
+end)
+
+-- ============================================
+-- 🎯 FLOATING TP GRAB BUTTON (fully draggable)
+-- ============================================
+local floatGui = Instance.new("ScreenGui")
+floatGui.Name = "HUS_FloatingTP"
+floatGui.ResetOnSpawn = false
+floatGui.Parent = CoreGui
+_G.HUS_FloatingTP = floatGui
+
+local floatFrame = Instance.new("Frame")
+floatFrame.Name = "Frame"
+floatFrame.Size = UDim2.new(0, 140, 0, 44)
+floatFrame.Position = UDim2.new(0, 20, 0.5, -22)
+floatFrame.BackgroundColor3 = Color3.fromRGB(160, 100, 255)
+floatFrame.BorderSizePixel = 0
+floatFrame.Active = true
+floatFrame.Parent = floatGui
+Instance.new("UICorner", floatFrame).CornerRadius = UDim.new(0, 10)
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color = Color3.fromRGB(200, 160, 255)
+floatStroke.Thickness = 1.5
+floatStroke.Parent = floatFrame
+
+-- Drag handle (left ~24px icon) — small dedicated area for moving
+local dragHandle = Instance.new("TextButton")
+dragHandle.Size = UDim2.new(0, 28, 1, 0)
+dragHandle.Position = UDim2.new(0, 0, 0, 0)
+dragHandle.BackgroundColor3 = Color3.fromRGB(130, 80, 210)
+dragHandle.BackgroundTransparency = 0.3
+dragHandle.Text = "≡"
+dragHandle.TextColor3 = Color3.fromRGB(255, 255, 255)
+dragHandle.Font = Enum.Font.GothamBold
+dragHandle.TextSize = 18
+dragHandle.BorderSizePixel = 0
+dragHandle.Parent = floatFrame
+Instance.new("UICorner", dragHandle).CornerRadius = UDim.new(0, 10)
+
+-- The actual clickable grab button (fills the rest)
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.new(1, -28, 1, 0)
+floatBtn.Position = UDim2.new(0, 28, 0, 0)
+floatBtn.BackgroundTransparency = 1
+floatBtn.Text = "🚀 TP GRAB"
+floatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextSize = 13
+floatBtn.Parent = floatFrame
+
+-- ── Drag logic for floating button (drag anywhere on it, but clicks on the grab side still fire) ──
+local fDragging = false
+local fDragMoved = false
+local fDragStart = nil
+local fStartPos = nil
+local F_DRAG_THRESHOLD = 6  -- pixels moved before it counts as a drag
+
+local function beginFDrag(input)
+    fDragging = true
+    fDragMoved = false
+    fDragStart = input.Position
+    fStartPos = floatFrame.Position
+end
+
+local function moveFDrag(input)
+    if not fDragging then return end
+    local delta = input.Position - fDragStart
+    if math.abs(delta.X) > F_DRAG_THRESHOLD or math.abs(delta.Y) > F_DRAG_THRESHOLD then
+        fDragMoved = true
+    end
+    floatFrame.Position = UDim2.new(
+        fStartPos.X.Scale, fStartPos.X.Offset + delta.X,
+        fStartPos.Y.Scale, fStartPos.Y.Offset + delta.Y
+    )
+end
+
+local function endFDrag()
+    fDragging = false
+    -- small delay so MouseButton1Click can read fDragMoved
+    task.delay(0.05, function() fDragMoved = false end)
+end
+
+-- Attach drag handlers to BOTH the drag handle and the frame itself
+for _, obj in ipairs({dragHandle, floatFrame}) do
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            beginFDrag(input)
+        end
+    end)
+    obj.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            moveFDrag(input)
+        end
+    end)
+    obj.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            endFDrag()
+        end
+    end)
+end
+
+-- The drag handle doesn't trigger grabs
+dragHandle.MouseButton1Click:Connect(function()
+    -- intentionally empty — handle is drag-only
+end)
+
+-- Grab click handler
+floatBtn.MouseButton1Click:Connect(function()
+    -- Don't fire if we just finished dragging
+    if fDragMoved then return end
+
+    local name = inputBox and inputBox.Text or ""
+    if name == "" then
+        if resultLabel then
+            resultLabel.Text = "⚠️ Enter a username first (main GUI)"
+            resultLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        end
+        return
+    end
+    local target = findPlayerByName(name)
+    if not target then
+        if resultLabel then
+            resultLabel.Text = "❌ Player not found: " .. name
+            resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        end
+        return
+    end
+    if resultLabel then
+        resultLabel.Text = "🚀 Floating TP Grab: " .. target.Name
+        resultLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    end
+    task.spawn(function()
+        local ok = teleportAndGrab(target)
+        if resultLabel then
+            if ok then
+                resultLabel.Text = "✅ Grabbed " .. target.Name .. " (floating)"
+                resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            else
+                resultLabel.Text = "❌ Grab failed — check output"
+                resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+            end
+        end
+    end)
+end)
+
+print("🇵🇭 🇵🇰 🇮🇳 HUS Grab System v9 loaded (fully moveable floating TP button) 🇵🇭 🇵🇰 🇮🇳")
